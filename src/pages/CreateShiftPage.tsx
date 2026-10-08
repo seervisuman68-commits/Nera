@@ -303,7 +303,7 @@ export const CreateShiftPage: React.FC = () => {
             <div className="space-y-1 text-center sm:text-left">
               <span className="text-[11px] text-slate-400 font-medium">Automatic Escrow Calculation:</span>
               <div className="text-xs text-slate-300">
-                Worker Pay: <strong className="text-white">{formatINR(shiftPay)}</strong> + NERA Fee (10%):{' '}
+                Worker Pay: <strong className="text-white">{formatINR(shiftPay)}</strong> + JEERA Fee (10%):{' '}
                 <strong className="text-indigo-300">{formatINR(platformFee)}</strong>
               </div>
             </div>

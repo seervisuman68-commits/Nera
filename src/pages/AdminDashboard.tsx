@@ -69,7 +69,7 @@ export const AdminDashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-widest mb-1.5">
             <ShieldCheck className="w-4 h-4" />
-            <span>NERA Master Operations Center</span>
+            <span>JEERA Master Operations Center</span>
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-white">Platform Administration</h1>
           <p className="text-xs sm:text-sm text-purple-200 mt-1">
@@ -87,7 +87,7 @@ export const AdminDashboard: React.FC = () => {
             <span>Sync MongoDB</span>
           </button>
           <div className="p-3 bg-purple-900/50 rounded-2xl border border-purple-700/50 text-center">
-            <span className="text-[10px] uppercase font-bold text-purple-300 block">NERA 10% Commission</span>
+            <span className="text-[10px] uppercase font-bold text-purple-300 block">JEERA 10% Commission</span>
             <span className="text-xl font-black text-emerald-400">{formatINR(analytics.platformRevenueFee)}</span>
           </div>
         </div>

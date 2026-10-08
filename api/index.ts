@@ -311,7 +311,7 @@ router.get(['/health', '/v1/health'], async (_req: Request, res: Response) => {
 
   res.json({
     status: 'online',
-    service: 'NERA Emergency Shift Platform Unified Backend',
+    service: 'JEERA Emergency Shift Platform Unified Backend',
     database: `MongoDB Atlas (Host: ${mongoose.connection.host}, DB: ${mongoose.connection.name})`,
     currency: 'INR (₹)',
     timestamp: new Date().toISOString(),
@@ -328,7 +328,7 @@ router.get(['/health', '/v1/health'], async (_req: Request, res: Response) => {
 router.post(['/auth/register', '/v1/auth/register'], async (req: Request, res: Response) => {
   try {
     const { name, email, role, phone } = req.body;
-    const cleanEmail = (email || `user-${Date.now()}@nera.in`).toLowerCase();
+    const cleanEmail = (email || `user-${Date.now()}@jeera.in`).toLowerCase();
 
     // Check if user already exists
     let user = await UserModel.findOne({ email: cleanEmail });
@@ -345,7 +345,7 @@ router.post(['/auth/register', '/v1/auth/register'], async (req: Request, res: R
       });
     }
 
-    res.status(201).json({ success: true, user, token: `jwt_nera_${user.id}` });
+    res.status(201).json({ success: true, user, token: `jwt_jeera_${user.id}` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -354,7 +354,7 @@ router.post(['/auth/register', '/v1/auth/register'], async (req: Request, res: R
 router.post(['/auth/login', '/v1/auth/login'], async (req: Request, res: Response) => {
   try {
     const { email, role } = req.body;
-    const cleanEmail = (email || 'demo@nera.in').toLowerCase();
+    const cleanEmail = (email || 'demo@jeera.in').toLowerCase();
     let user = await UserModel.findOne({ email: cleanEmail });
 
     if (!user) {
@@ -369,7 +369,7 @@ router.post(['/auth/login', '/v1/auth/login'], async (req: Request, res: Respons
       });
     }
 
-    res.json({ success: true, user, token: `jwt_nera_${user.id}` });
+    res.json({ success: true, user, token: `jwt_jeera_${user.id}` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -552,7 +552,7 @@ router.post(['/shifts', '/v1/shifts'], async (req: Request, res: Response) => {
       status: 'open',
       cascadeCandidates: [],
       currentCascadeIndex: 0,
-      qrCodeSecret: `NERA_SHIFT_${Math.floor(1000 + Math.random() * 9000)}_SEC`,
+      qrCodeSecret: `JEERA_SHIFT_${Math.floor(1000 + Math.random() * 9000)}_SEC`,
       createdAt: new Date(),
     };
 

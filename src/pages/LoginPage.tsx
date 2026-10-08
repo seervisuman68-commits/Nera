@@ -18,7 +18,7 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
     setErrorMessage(null);
     try {
-      const success = await login(email || 'demo@nera.in', role);
+      const success = await login(email || 'demo@jeera.in', role);
       if (success) {
         if (role === 'business') navigate('/business-dashboard');
         else if (role === 'worker') navigate('/worker-dashboard');
@@ -45,7 +45,7 @@ export const LoginPage: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white mx-auto shadow-md">
             <Zap className="w-6 h-6 fill-white" />
           </div>
-          <h2 className="mt-4 text-2xl font-black text-slate-900 tracking-tight">Log in to NERA</h2>
+          <h2 className="mt-4 text-2xl font-black text-slate-900 tracking-tight">Log in to JEERA</h2>
           <p className="text-xs text-slate-500 mt-1">A Helping Hand When You Need One</p>
         </div>
 
@@ -86,7 +86,7 @@ export const LoginPage: React.FC = () => {
             >
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-purple-600 group-hover:text-white" />
-                <span>NERA Admin Operations</span>
+                <span>JEERA Admin Operations</span>
               </div>
               <span className="text-[10px] uppercase font-bold text-purple-600 group-hover:text-purple-100">Platform Admin →</span>
             </button>
@@ -129,7 +129,7 @@ export const LoginPage: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={role === 'business' ? 'alex@urbanbrew.com' : 'jordan.rivera@nera.dev'}
+                placeholder={role === 'business' ? 'alex@urbanbrew.com' : 'jordan.rivera@jeera.dev'}
                 className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>

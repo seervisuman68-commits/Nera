@@ -49,7 +49,7 @@ export const RegisterPage: React.FC = () => {
       const success = await signup(
         {
           name: name || (role === 'business' ? 'New Business Manager' : 'New Worker'),
-          email: email || `user-${Date.now()}@nera.in`,
+          email: email || `user-${Date.now()}@jeera.in`,
           role,
           phone: '+91 98765 43210',
         },
@@ -81,7 +81,7 @@ export const RegisterPage: React.FC = () => {
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white mx-auto shadow-md">
             <Zap className="w-6 h-6 fill-white" />
           </div>
-          <h2 className="mt-3 text-2xl font-black text-slate-900 tracking-tight">Create NERA Account</h2>
+          <h2 className="mt-3 text-2xl font-black text-slate-900 tracking-tight">Create JEERA Account</h2>
           <p className="text-xs text-slate-500 mt-1">Instant Onboarding for Businesses & Verified Workers</p>
         </div>
 

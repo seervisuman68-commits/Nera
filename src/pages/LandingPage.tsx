@@ -83,7 +83,7 @@ export const LandingPage: React.FC = () => {
             </h1>
 
             <p className="mt-6 text-lg sm:text-xl text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
-              When an employee unexpectedly calls out, NERA automatically finds, smart-matches, and deploys verified nearby workers in <strong className="text-white font-semibold">under 15 minutes</strong>.
+              When an employee unexpectedly calls out, JEERA automatically finds, smart-matches, and deploys verified nearby workers in <strong className="text-white font-semibold">under 15 minutes</strong>.
             </p>
 
             {/* CTAs */}
@@ -136,7 +136,7 @@ export const LandingPage: React.FC = () => {
               Autonomous Shift Engine
             </span>
             <h2 className="text-3xl sm:text-4xl font-black text-white mt-2">
-              How NERA Fixes Urgent Staffing Gaps in Seconds
+              How JEERA Fixes Urgent Staffing Gaps in Seconds
             </h2>
             <p className="text-slate-400 text-sm mt-3">
               No manual phone calls. No endless group chats. Our weighted engine matches candidates and cascades offers automatically.
@@ -291,7 +291,7 @@ export const LandingPage: React.FC = () => {
                 5-Factor Smart Match Engine
               </h2>
               <p className="text-slate-400 text-sm mt-3 leading-relaxed">
-                Rather than broadcasting spam notifications, NERA calculates a precision weighted score for each nearby worker in real-time.
+                Rather than broadcasting spam notifications, JEERA calculates a precision weighted score for each nearby worker in real-time.
               </p>
 
               <div className="mt-8 space-y-4">

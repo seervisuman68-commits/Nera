@@ -63,7 +63,7 @@ export const AnalyticsPage: React.FC = () => {
 
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase">NERA 10% Platform Fee</span>
+            <span className="text-xs font-bold uppercase">JEERA 10% Platform Fee</span>
             <Zap className="w-5 h-5 text-amber-500" />
           </div>
           <div className="text-3xl font-black text-indigo-600 mt-2">{formatINR(analytics.platformRevenueFee)}</div>

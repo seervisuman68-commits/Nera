@@ -1,7 +1,7 @@
-# NERA — Emergency Shift-Replacement Platform
+# JEERA — Emergency Shift-Replacement Platform
 > **"A Helping Hand When You Need One"**
 
-NERA is an emergency shift-replacement platform that helps cafés, restaurants, retail stores, salons, and small businesses instantly find verified nearby workers when an employee suddenly becomes unavailable.
+JEERA is an emergency shift-replacement platform that helps cafés, restaurants, retail stores, salons, and small businesses instantly find verified nearby workers when an employee suddenly becomes unavailable.
 
 ---
 
@@ -13,7 +13,7 @@ NERA is an emergency shift-replacement platform that helps cafés, restaurants, 
 
 2. **Sequential 2-Minute Offer Cascade**
    - Notifies Candidate #1 with a 2-minute countdown timer.
-   - If Candidate #1 declines or does not respond within 2 minutes, NERA automatically forwards the offer to Candidate #2, then Candidate #3, until filled.
+   - If Candidate #1 declines or does not respond within 2 minutes, JEERA automatically forwards the offer to Candidate #2, then Candidate #3, until filled.
 
 3. **Autonomous Backup Worker System**
    - When the primary worker accepts, the system automatically assigns the next highest-scoring candidate as a **Backup Worker (Standby)**, offering 100% protection against last-minute disruptions.

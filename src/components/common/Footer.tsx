@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
                 <Zap className="w-4 h-4 fill-white" />
               </div>
-              <span className="text-xl font-black text-white tracking-tight">NERA</span>
+              <span className="text-xl font-black text-white tracking-tight">JEERA</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               "A Helping Hand When You Need One" — The emergency shift-replacement platform for hospitality, retail, and local businesses.
@@ -96,7 +96,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="mt-10 pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p>© 2026 NERA Platform Inc. All rights reserved.</p>
+          <p>© 2026 JEERA Platform Inc. All rights reserved.</p>
           <div className="flex items-center gap-4">
             <span className="hover:text-slate-400 cursor-pointer">Privacy Policy</span>
             <span className="hover:text-slate-400 cursor-pointer">Terms of Service</span>

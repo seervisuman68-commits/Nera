@@ -115,7 +115,7 @@ export const Navbar: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-2xl font-black tracking-tight text-slate-900 font-sans">NERA</span>
+                  <span className="text-2xl font-black tracking-tight text-slate-900 font-sans">JEERA</span>
                   <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
                     MVP
                   </span>

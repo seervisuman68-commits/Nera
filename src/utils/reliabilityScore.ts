@@ -1,5 +1,5 @@
 /**
- * Reliability Score Engine for NERA
+ * Reliability Score Engine for JEERA
  * Calculates worker reliability percentage based on real historical performance:
  * - Attendance & Completion (40% weight)
  * - Punctuality & On-Time arrivals (35% weight)

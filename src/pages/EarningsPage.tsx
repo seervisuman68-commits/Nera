@@ -79,7 +79,7 @@ export const EarningsPage: React.FC = () => {
           </div>
           <p className="text-xs text-emerald-200 mt-2 flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Guaranteed by NERA Escrow System</span>
+            <span>Guaranteed by JEERA Escrow System</span>
           </p>
         </div>
 

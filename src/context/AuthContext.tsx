@@ -21,17 +21,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('nera_current_user');
+    const saved = localStorage.getItem('jeera_current_user');
     return saved ? JSON.parse(saved) : null;
   });
 
   const [currentBusiness, setCurrentBusiness] = useState<Business | null>(() => {
-    const saved = localStorage.getItem('nera_current_business');
+    const saved = localStorage.getItem('jeera_current_business');
     return saved ? JSON.parse(saved) : null;
   });
 
   const [currentWorker, setCurrentWorker] = useState<Worker | null>(() => {
-    const saved = localStorage.getItem('nera_current_worker');
+    const saved = localStorage.getItem('jeera_current_worker');
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -39,8 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser) {
       setCurrentBusiness(null);
       setCurrentWorker(null);
-      localStorage.removeItem('nera_current_business');
-      localStorage.removeItem('nera_current_worker');
+      localStorage.removeItem('jeera_current_business');
+      localStorage.removeItem('jeera_current_worker');
       return;
     }
 
@@ -59,8 +59,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setCurrentBusiness(found);
         setCurrentWorker(null);
-        localStorage.setItem('nera_current_business', JSON.stringify(found));
-        localStorage.removeItem('nera_current_worker');
+        localStorage.setItem('jeera_current_business', JSON.stringify(found));
+        localStorage.removeItem('jeera_current_worker');
       } else if (currentUser.role === 'worker') {
         const res = await api.getWorkers();
         let found = res.workers.find((w) => w.userId === currentUser.id || w.id === currentUser.id || w.name.toLowerCase() === currentUser.name.toLowerCase());
@@ -77,8 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setCurrentWorker(found);
         setCurrentBusiness(null);
-        localStorage.setItem('nera_current_worker', JSON.stringify(found));
-        localStorage.removeItem('nera_current_business');
+        localStorage.setItem('jeera_current_worker', JSON.stringify(found));
+        localStorage.removeItem('jeera_current_business');
       } else {
         setCurrentBusiness(null);
         setCurrentWorker(null);
@@ -90,12 +90,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('nera_current_user', JSON.stringify(currentUser));
+      localStorage.setItem('jeera_current_user', JSON.stringify(currentUser));
       refreshProfiles();
     } else {
-      localStorage.removeItem('nera_current_user');
-      localStorage.removeItem('nera_current_business');
-      localStorage.removeItem('nera_current_worker');
+      localStorage.removeItem('jeera_current_user');
+      localStorage.removeItem('jeera_current_business');
+      localStorage.removeItem('jeera_current_worker');
       setCurrentBusiness(null);
       setCurrentWorker(null);
     }
@@ -114,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const user: User = {
         id: `user-${Date.now()}`,
         name: email ? email.split('@')[0] : 'User',
-        email: email || 'user@nera.in',
+        email: email || 'user@jeera.in',
         role: role || 'business',
         phone: '+91 98765 43210',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -143,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             address: (specificData as Partial<Business>)?.address || '',
           });
           setCurrentBusiness(bizRes.business);
-          localStorage.setItem('nera_current_business', JSON.stringify(bizRes.business));
+          localStorage.setItem('jeera_current_business', JSON.stringify(bizRes.business));
         } else if (user.role === 'worker') {
           const wrkRes = await api.createWorker({
             userId: user.id,
@@ -158,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             reliabilityScore: 98,
           });
           setCurrentWorker(wrkRes.worker);
-          localStorage.setItem('nera_current_worker', JSON.stringify(wrkRes.worker));
+          localStorage.setItem('jeera_current_worker', JSON.stringify(wrkRes.worker));
         }
         return true;
       }
@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const user: User = {
         id: `user-${Date.now()}`,
         name: userData.name || 'New User',
-        email: userData.email || 'user@nera.in',
+        email: userData.email || 'user@jeera.in',
         role: userData.role || 'business',
         phone: userData.phone || '+91 98765 43210',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -182,16 +182,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
     setCurrentBusiness(null);
     setCurrentWorker(null);
-    localStorage.removeItem('nera_current_user');
-    localStorage.removeItem('nera_current_business');
-    localStorage.removeItem('nera_current_worker');
+    localStorage.removeItem('jeera_current_user');
+    localStorage.removeItem('jeera_current_business');
+    localStorage.removeItem('jeera_current_worker');
   };
 
   const switchRole = (role: UserRole) => {
     if (currentUser) {
       setCurrentUser({ ...currentUser, role });
     } else {
-      login(`demo.${role}@nera.in`, role);
+      login(`demo.${role}@jeera.in`, role);
     }
   };
 
@@ -203,15 +203,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (userId.includes('w1') || userId.includes('jordan')) {
       role = 'worker';
       name = 'Jordan Rivera';
-      email = 'jordan.rivera@nera.in';
+      email = 'jordan.rivera@jeera.in';
     } else if (userId.includes('w2') || userId.includes('maya')) {
       role = 'worker';
       name = 'Maya Chen';
-      email = 'maya.chen@nera.in';
+      email = 'maya.chen@jeera.in';
     } else if (userId.includes('admin')) {
       role = 'admin';
-      name = 'NERA Master Admin';
-      email = 'admin@nera.in';
+      name = 'JEERA Master Admin';
+      email = 'admin@jeera.in';
     }
 
     const user: User = {

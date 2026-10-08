@@ -101,7 +101,7 @@ export const ShiftOfferPage: React.FC = () => {
           Emergency Shift Offer
         </h1>
         <p className="text-xs sm:text-sm text-slate-500">
-          NERA's Smart Match engine prioritized you for this urgent shift replacement.
+          JEERA's Smart Match engine prioritized you for this urgent shift replacement.
         </p>
       </div>
 

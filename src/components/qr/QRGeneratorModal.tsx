@@ -78,7 +78,7 @@ export const QRGeneratorModal: React.FC<QRGeneratorModalProps> = ({ shift, isOpe
               }}
             />
             <div className="absolute inset-x-0 bottom-2 text-[10px] text-blue-600 font-bold bg-blue-50/90 py-0.5 rounded-md mx-4">
-              NERA Anti-Spoof Encrypted
+              JEERA Anti-Spoof Encrypted
             </div>
           </div>
 
