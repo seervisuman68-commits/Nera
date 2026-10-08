@@ -77,33 +77,44 @@ export const CreateShiftPage: React.FC = () => {
   const platformFee = Math.round(shiftPay * 0.10 * 100) / 100; // 10% Platform fee
   const totalCost = shiftPay + platformFee;
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    setErrorMessage(null);
 
-    const created = await createShift({
-      businessId: currentBusiness?.id || 'biz-1',
-      businessName: currentBusiness?.companyName || 'Urban Brew Café',
-      businessCategory: currentBusiness?.category || 'café',
-      role,
-      requiredSkills: selectedSkills,
-      date,
-      startTime,
-      endTime,
-      location: {
-        address,
-        latitude,
-        longitude,
-      },
-      hourlyRate,
-      payAmount: shiftPay,
-      platformFee,
-      totalCost,
-      urgency,
-      notes,
-    });
+    try {
+      const created = await createShift({
+        businessId: currentBusiness?.id || 'biz-1',
+        businessName: currentBusiness?.companyName || 'Urban Brew Café',
+        businessCategory: currentBusiness?.category || 'café',
+        role,
+        requiredSkills: selectedSkills,
+        date,
+        startTime,
+        endTime,
+        location: {
+          address,
+          latitude,
+          longitude,
+        },
+        hourlyRate,
+        payAmount: shiftPay,
+        platformFee,
+        totalCost,
+        urgency,
+        notes,
+      });
 
-    // Navigate to Smart Match Results Page with the newly created shift ID
-    navigate(`/smart-match/${created.id}`);
+      // Navigate to Smart Match Results Page with the newly created shift ID
+      navigate(`/smart-match/${created.id}`);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to create shift in MongoDB');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -357,14 +368,22 @@ export const CreateShiftPage: React.FC = () => {
           />
         </div>
 
+        {errorMessage && (
+          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold rounded-2xl flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* Submit & Match Button */}
         <div className="flex items-center justify-end gap-4">
           <button
             type="submit"
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-base shadow-xl shadow-blue-500/25 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all"
+            disabled={isSubmitting}
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-base shadow-xl shadow-blue-500/25 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all disabled:opacity-50"
           >
             <Zap className="w-5 h-5 fill-white" />
-            <span>Find Smart Matches & Launch Cascade</span>
+            <span>{isSubmitting ? 'Posting & Saving to MongoDB...' : 'Find Smart Matches & Launch Cascade'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

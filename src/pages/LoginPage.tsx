@@ -11,16 +11,25 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'business' | 'worker' | 'admin'>('business');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const success = await login(email || 'demo@nera.live', role);
-    setLoading(false);
-    if (success) {
-      if (role === 'business') navigate('/business-dashboard');
-      else if (role === 'worker') navigate('/worker-dashboard');
-      else navigate('/admin-dashboard');
+    setErrorMessage(null);
+    try {
+      const success = await login(email || 'demo@nera.in', role);
+      if (success) {
+        if (role === 'business') navigate('/business-dashboard');
+        else if (role === 'worker') navigate('/worker-dashboard');
+        else navigate('/admin-dashboard');
+      } else {
+        setErrorMessage('Invalid credentials or database offline.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Login failed. Please check network.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -141,10 +150,17 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {errorMessage && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <span>{loading ? 'Authenticating...' : 'Sign In to Dashboard'}</span>
             <ArrowRight className="w-4 h-4" />

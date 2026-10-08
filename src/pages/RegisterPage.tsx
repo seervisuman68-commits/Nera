@@ -29,6 +29,9 @@ export const RegisterPage: React.FC = () => {
     'Salon Assist',
   ];
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const toggleSkill = (skill: string) => {
     if (skills.includes(skill)) {
       setSkills(skills.filter((s) => s !== skill));
@@ -39,17 +42,35 @@ export const RegisterPage: React.FC = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signup({
-      name: name || (role === 'business' ? 'New Business Manager' : 'New Worker'),
-      email: email || `user-${Date.now()}@nera.dev`,
-      role,
-      phone: '+1 (555) 987-6543',
-    });
+    setIsSubmitting(true);
+    setErrorMessage(null);
 
-    if (role === 'business') {
-      navigate('/business-dashboard');
-    } else {
-      navigate('/worker-dashboard');
+    try {
+      const success = await signup(
+        {
+          name: name || (role === 'business' ? 'New Business Manager' : 'New Worker'),
+          email: email || `user-${Date.now()}@nera.in`,
+          role,
+          phone: '+91 98765 43210',
+        },
+        role === 'business'
+          ? { companyName: companyName || name, category }
+          : { role: workerRole, skills }
+      );
+
+      if (success) {
+        if (role === 'business') {
+          navigate('/business-dashboard');
+        } else {
+          navigate('/worker-dashboard');
+        }
+      } else {
+        setErrorMessage('Registration failed. Please try again.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error creating account');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -199,15 +220,23 @@ export const RegisterPage: React.FC = () => {
             </>
           )}
 
+          {errorMessage && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <button
             type="submit"
-            className={`w-full py-3.5 px-4 rounded-xl text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-4 ${
+            disabled={isSubmitting}
+            className={`w-full py-3.5 px-4 rounded-xl text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50 ${
               role === 'business'
                 ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
                 : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
             }`}
           >
-            <span>Complete Registration</span>
+            <span>{isSubmitting ? 'Creating Account...' : 'Complete Registration'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>

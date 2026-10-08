@@ -42,21 +42,26 @@ export const SmartMatchResultsPage: React.FC = () => {
   // Calculate weighted matches
   const rankedCandidates = rankWorkersForShift(workers, shift);
 
-  const handleLaunchCascade = () => {
-    startOfferCascade(shift.id, selectedCandidateIds.length > 0 ? selectedCandidateIds : undefined);
+  const handleLaunchCascade = async () => {
     setCascadeLaunched(true);
     try {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#2563eb', '#3b82f6', '#10b981', '#f59e0b'],
-      });
-    } catch {}
+      await startOfferCascade(shift.id, selectedCandidateIds.length > 0 ? selectedCandidateIds : undefined);
+      try {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#2563eb', '#3b82f6', '#10b981', '#f59e0b'],
+        });
+      } catch {}
 
-    setTimeout(() => {
-      navigate(`/live-shift/${shift.id}`);
-    }, 1200);
+      setTimeout(() => {
+        navigate(`/live-shift/${shift.id}`);
+      }, 1000);
+    } catch (err) {
+      setCascadeLaunched(false);
+      console.error('Cascade error:', err);
+    }
   };
 
   return (

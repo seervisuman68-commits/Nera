@@ -1,6 +1,7 @@
 import type { User, Business, Worker, Shift, AttendanceRecord, Rating, PlatformAnalytics } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+// Use relative API path '/api/v1' for seamless Vercel production deployment & local Vite proxying
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -17,10 +18,18 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch {
+      data = { error: `Server returned non-JSON response (${response.status} ${response.statusText})` };
+    }
+
     console.log(`📥 [FRONTEND API RESPONSE] <- Status: ${response.status} from ${endpoint}:`, data);
+
     if (!response.ok) {
-      throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
+      const errMsg = data?.error || data?.message || `Request failed with status ${response.status}`;
+      throw new Error(errMsg);
     }
     return data;
   } catch (error: any) {
@@ -29,15 +38,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 }
 
-// 1. Auth & Users API
+// REST API Service Client
 export const api = {
   // Health
   checkHealth: async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/health');
+      const res = await fetch('/api/health');
       return await res.json();
     } catch {
-      return { status: 'offline' };
+      return { status: 'offline', database: 'Disconnected' };
     }
   },
 
@@ -143,4 +152,3 @@ export const api = {
     body: JSON.stringify(userData || {}),
   }),
 };
-

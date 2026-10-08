@@ -53,27 +53,35 @@ export const ShiftOfferPage: React.FC = () => {
     );
   }
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (!currentShift) return;
-    acceptShiftOffer(currentShift.id, currentWorker.id);
     try {
-      confetti({
-        particleCount: 110,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#10b981', '#2563eb', '#f59e0b', '#8b5cf6'],
-      });
-    } catch {}
+      await acceptShiftOffer(currentShift.id, currentWorker.id);
+      try {
+        confetti({
+          particleCount: 110,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#10b981', '#2563eb', '#f59e0b', '#8b5cf6'],
+        });
+      } catch {}
 
-    setTimeout(() => {
-      navigate('/worker-dashboard');
-    }, 1000);
+      setTimeout(() => {
+        navigate('/worker-dashboard');
+      }, 800);
+    } catch (err) {
+      console.error('Accept offer error:', err);
+    }
   };
 
-  const handleDecline = () => {
+  const handleDecline = async () => {
     if (!currentShift) return;
-    declineShiftOffer(currentShift.id, currentWorker.id);
-    navigate('/worker-dashboard');
+    try {
+      await declineShiftOffer(currentShift.id, currentWorker.id);
+      navigate('/worker-dashboard');
+    } catch (err) {
+      console.error('Decline offer error:', err);
+    }
   };
 
   const formatTimer = (secs: number) => {

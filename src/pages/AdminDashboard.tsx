@@ -221,7 +221,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
           <div>
             <h3 className="text-lg font-black text-slate-900">MongoDB Atlas Architecture & Database Collections</h3>
-            <p className="text-xs text-slate-500">Live Mongoose schema mappings synchronized across React frontend and Express REST API backend (`http://localhost:5000/api/v1`)</p>
+            <p className="text-xs text-slate-500">Live Mongoose schema mappings synchronized across React frontend and REST API backend (/api/v1)</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">

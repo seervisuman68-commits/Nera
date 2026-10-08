@@ -18,6 +18,9 @@ export const RatingModal: React.FC<RatingModalProps> = ({ shift, isOpen, onClose
   const [review, setReview] = useState<string>('Punctual, great skills, zero handholding needed. Absolute lifesaver!');
   const [selectedTags, setSelectedTags] = useState<string[]>(['Super Punctual', 'Fast Learner', 'Great Attitude']);
 
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const availableTags = [
@@ -38,23 +41,31 @@ export const RatingModal: React.FC<RatingModalProps> = ({ shift, isOpen, onClose
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    submitShiftRating({
-      shiftId: shift.id,
-      fromUserId: shift.businessId,
-      fromUserName: shift.businessName,
-      toUserId: shift.assignedWorkerId || '',
-      toUserName: shift.assignedWorkerName || '',
-      rating,
-      review,
-      tags: selectedTags,
-    });
+    setIsSubmitting(true);
+    setErrorMessage(null);
     try {
-      confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
-    } catch {}
-    if (onSubmitted) onSubmitted();
-    onClose();
+      await submitShiftRating({
+        shiftId: shift.id,
+        fromUserId: shift.businessId,
+        fromUserName: shift.businessName,
+        toUserId: shift.assignedWorkerId || '',
+        toUserName: shift.assignedWorkerName || '',
+        rating,
+        review,
+        tags: selectedTags,
+      });
+      try {
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+      } catch {}
+      if (onSubmitted) onSubmitted();
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to submit rating');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -144,20 +155,29 @@ export const RatingModal: React.FC<RatingModalProps> = ({ shift, isOpen, onClose
             ></textarea>
           </div>
 
+          {errorMessage && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <div className="pt-2 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-sm rounded-xl shadow-md hover:from-amber-600 hover:to-orange-700 transition-all flex items-center gap-1.5"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-sm rounded-xl shadow-md hover:from-amber-600 hover:to-orange-700 transition-all flex items-center gap-1.5 disabled:opacity-50"
             >
               <Sparkles className="w-4 h-4" />
-              Submit Rating & Update Score
+              {isSubmitting ? 'Submitting...' : 'Submit Rating & Update Score'}
             </button>
           </div>
         </form>

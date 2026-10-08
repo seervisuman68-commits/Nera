@@ -21,6 +21,8 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
   const [address, setAddress] = useState('Indiranagar, Bengaluru (0.5 km)');
   const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus>('Available Now');
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['Barista', 'POS Operations', 'Latte Art']);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -48,30 +50,38 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const created = await addWorker({
-      name: name || 'Test Worker',
-      role,
-      hourlyRate,
-      experienceYears,
-      reliabilityScore,
-      availabilityStatus,
-      isAvailable: availabilityStatus === 'Available Now',
-      skills: selectedSkills,
-      location: {
-        latitude: 12.9716,
-        longitude: 77.5946,
-        address,
-      },
-      avatar: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 500)}?w=150&auto=format&fit=crop&q=80`,
-    });
+    setIsSubmitting(true);
+    setErrorMessage(null);
 
     try {
-      confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
-    } catch {}
+      const created = await addWorker({
+        name: name || 'Test Worker',
+        role,
+        hourlyRate,
+        experienceYears,
+        reliabilityScore,
+        availabilityStatus,
+        isAvailable: availabilityStatus === 'Available Now',
+        skills: selectedSkills,
+        location: {
+          latitude: 12.9716,
+          longitude: 77.5946,
+          address,
+        },
+        avatar: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 500)}?w=150&auto=format&fit=crop&q=80`,
+      });
 
-    if (onAdded) onAdded(created);
-    onClose();
+      try {
+        confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
+      } catch {}
+
+      if (onAdded) onAdded(created);
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to register worker to database');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -204,20 +214,29 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
             </div>
           </div>
 
+          {errorMessage && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <div className="pt-2 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl"
+              disabled={isSubmitting}
+              className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
             >
               <Sparkles className="w-4 h-4" />
-              Register Worker to Pool
+              {isSubmitting ? 'Registering...' : 'Register Worker to Pool'}
             </button>
           </div>
         </form>

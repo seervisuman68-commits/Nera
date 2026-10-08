@@ -41,32 +41,36 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     }
   };
 
-  const handleScanAction = () => {
+  const handleScanAction = async () => {
     setIsScanning(true);
     setStatusMsg(null);
 
-    setTimeout(async () => {
-      setIsScanning(false);
+    try {
       if (mode === 'check_in') {
         const result = await checkInWorkerQR(shift.id, worker.id, manualCode.trim());
+        setIsScanning(false);
         if (result.success) {
           triggerConfetti();
           setStatusMsg({ type: 'success', text: result.message });
-          if (onSuccess) setTimeout(onSuccess, 1500);
+          if (onSuccess) setTimeout(onSuccess, 1200);
         } else {
           setStatusMsg({ type: 'error', text: result.message });
         }
       } else {
         const result = await checkOutWorkerQR(shift.id, worker.id);
+        setIsScanning(false);
         if (result.success) {
           triggerConfetti();
           setStatusMsg({ type: 'success', text: result.message });
-          if (onSuccess) setTimeout(onSuccess, 1500);
+          if (onSuccess) setTimeout(onSuccess, 1200);
         } else {
           setStatusMsg({ type: 'error', text: result.message });
         }
       }
-    }, 800);
+    } catch (err: any) {
+      setIsScanning(false);
+      setStatusMsg({ type: 'error', text: err.message || 'QR Scan failed' });
+    }
   };
 
   return (
