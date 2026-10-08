@@ -1,99 +1,126 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(cors());
 app.use(express.json());
 
-// In-Memory Database collections (Isomorphic with Firestore)
-interface DBUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'business' | 'worker' | 'admin';
-  phone: string;
-  createdAt: string;
+// MongoDB Mongoose Connection
+let isMongoConnected = false;
+if (MONGODB_URI && MONGODB_URI.trim() !== '') {
+  mongoose
+    .connect(MONGODB_URI)
+    .then(() => {
+      isMongoConnected = true;
+      console.log('✅ Connected to MongoDB Atlas successfully!');
+    })
+    .catch((err) => {
+      console.warn('⚠️ MongoDB Atlas connection error. Falling back to local storage:', err.message);
+    });
+} else {
+  console.log('ℹ️ No MONGODB_URI found in .env. Running with fast in-memory & Firestore-ready store.');
 }
 
-interface DBWorker {
-  id: string;
-  userId: string;
-  name: string;
-  role: string;
-  skills: string[];
-  experienceYears: number;
-  reliabilityScore: number;
-  isAvailable: boolean;
-  availabilityStatus: 'Available Now' | 'Available Later' | 'Unavailable';
-  location: { latitude: number; longitude: number; address: string };
-  ratingAvg: number;
-  totalRatings: number;
-  totalShiftsCompleted: number;
-  hourlyRate: number;
-  badges: string[];
-  punctualityRate: number;
-  completionRate: number;
-  cancellationRate: number;
-}
+// Mongoose Schemas (when MongoDB is connected)
+const UserSchema = new mongoose.Schema({
+  id: String,
+  name: String,
+  email: String,
+  role: String,
+  phone: String,
+  createdAt: { type: Date, default: Date.now },
+});
 
-interface DBShift {
-  id: string;
-  businessId: string;
-  businessName: string;
-  role: string;
-  requiredSkills: string[];
-  startTime: string;
-  endTime: string;
-  date: string;
-  location: { address: string; latitude: number; longitude: number };
-  payAmount: number;
-  hourlyRate: number;
-  platformFee: number;
-  totalCost: number;
-  urgency: string;
-  status: 'open' | 'cascading' | 'assigned' | 'in_progress' | 'completed' | 'cancelled';
-  assignedWorkerId?: string;
-  assignedWorkerName?: string;
-  backupWorkerId?: string;
-  backupWorkerName?: string;
-  cascadeCandidates: any[];
-  currentCascadeIndex: number;
-  qrCodeSecret: string;
-  createdAt: string;
-}
+const WorkerSchema = new mongoose.Schema({
+  id: String,
+  userId: String,
+  name: String,
+  role: String,
+  skills: [String],
+  experienceYears: Number,
+  reliabilityScore: Number,
+  isAvailable: Boolean,
+  availabilityStatus: String,
+  location: { latitude: Number, longitude: Number, address: String },
+  ratingAvg: Number,
+  totalRatings: Number,
+  totalShiftsCompleted: Number,
+  hourlyRate: Number,
+  badges: [String],
+  punctualityRate: Number,
+  completionRate: Number,
+  cancellationRate: Number,
+});
 
-interface DBAttendance {
-  id: string;
-  shiftId: string;
-  workerId: string;
-  workerName: string;
-  checkInTime: string;
-  checkOutTime?: string;
-  status: 'checked_in' | 'completed' | 'late' | 'no_show';
-  verifiedBy: 'qr_scan' | 'manual_override';
-  locationVerified: boolean;
-}
+const ShiftSchema = new mongoose.Schema({
+  id: String,
+  businessId: String,
+  businessName: String,
+  role: String,
+  requiredSkills: [String],
+  startTime: String,
+  endTime: String,
+  date: String,
+  location: { address: String, latitude: Number, longitude: Number },
+  payAmount: Number,
+  hourlyRate: Number,
+  platformFee: Number,
+  totalCost: Number,
+  urgency: String,
+  status: String,
+  assignedWorkerId: String,
+  assignedWorkerName: String,
+  backupWorkerId: String,
+  backupWorkerName: String,
+  cascadeCandidates: Array,
+  currentCascadeIndex: Number,
+  qrCodeSecret: String,
+  createdAt: { type: Date, default: Date.now },
+});
 
-interface DBRating {
-  id: string;
-  shiftId: string;
-  fromUserId: string;
-  toUserId: string;
-  rating: number;
-  review: string;
-  tags: string[];
-  createdAt: string;
-}
+const AttendanceSchema = new mongoose.Schema({
+  id: String,
+  shiftId: String,
+  workerId: String,
+  workerName: String,
+  checkInTime: String,
+  checkOutTime: String,
+  status: String,
+  verifiedBy: String,
+  locationVerified: Boolean,
+});
 
-// Initial storage
-const db = {
+const RatingSchema = new mongoose.Schema({
+  id: String,
+  shiftId: String,
+  fromUserId: String,
+  toUserId: String,
+  rating: Number,
+  review: String,
+  tags: [String],
+  createdAt: { type: Date, default: Date.now },
+});
+
+const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
+const WorkerModel = mongoose.models.Worker || mongoose.model('Worker', WorkerSchema);
+const ShiftModel = mongoose.models.Shift || mongoose.model('Shift', ShiftSchema);
+const AttendanceModel = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
+const RatingModel = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
+
+// In-Memory Database collections (Fast fallback)
+const inMemoryDb = {
   users: [
     { id: 'user-b1', name: 'Alex Johnson', email: 'alex@urbanbrew.com', role: 'business', phone: '+15552345678', createdAt: new Date().toISOString() },
     { id: 'user-w1', name: 'Jordan Rivera', email: 'jordan@nera.dev', role: 'worker', phone: '+15554567890', createdAt: new Date().toISOString() },
     { id: 'user-admin', name: 'Admin Operations', email: 'admin@nera.live', role: 'admin', phone: '+18005556372', createdAt: new Date().toISOString() },
-  ] as DBUser[],
+  ],
   workers: [
     {
       id: 'w-1',
@@ -135,10 +162,10 @@ const db = {
       completionRate: 98.0,
       cancellationRate: 2.0,
     },
-  ] as DBWorker[],
-  shifts: [] as DBShift[],
-  attendance: [] as DBAttendance[],
-  ratings: [] as DBRating[],
+  ],
+  shifts: [] as any[],
+  attendance: [] as any[],
+  ratings: [] as any[],
 };
 
 // Distance Helper (Haversine km)
@@ -154,29 +181,21 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 // 5-Factor Weighted Smart Matching Formula
-function computeMatchScore(worker: DBWorker, shift: DBShift) {
-  // 1. Availability (30%)
+function computeMatchScore(worker: any, shift: any) {
   const availScore = worker.availabilityStatus === 'Available Now' ? 100 : worker.availabilityStatus === 'Available Later' ? 60 : 0;
-
-  // 2. Skill Match (25%)
   const reqSkills = shift.requiredSkills || [];
-  const workerSkills = (worker.skills || []).map((s) => s.toLowerCase());
-  const matchedSkills = reqSkills.filter((s) => workerSkills.includes(s.toLowerCase()));
+  const workerSkills = (worker.skills || []).map((s: string) => s.toLowerCase());
+  const matchedSkills = reqSkills.filter((s: string) => workerSkills.includes(s.toLowerCase()));
   const skillScore = reqSkills.length > 0 ? (matchedSkills.length / reqSkills.length) * 100 : 100;
 
-  // 3. Distance (20%)
   const dist = calculateDistanceKm(
-    shift.location.latitude || 40.7248,
-    shift.location.longitude || -73.9984,
-    worker.location.latitude || 40.7285,
-    worker.location.longitude || -73.9942
+    shift.location?.latitude || 40.7248,
+    shift.location?.longitude || -73.9984,
+    worker.location?.latitude || 40.7285,
+    worker.location?.longitude || -73.9942
   );
   const distScore = Math.max(0, (1.0 - dist / 20.0) * 100);
-
-  // 4. Reliability (15%)
   const relScore = worker.reliabilityScore || 90;
-
-  // 5. Experience (10%)
   const expScore = Math.min(100, ((worker.experienceYears || 0) / 5.0) * 100);
 
   const totalScore = 0.3 * availScore + 0.25 * skillScore + 0.2 * distScore + 0.15 * relScore + 0.1 * expScore;
@@ -197,25 +216,24 @@ function computeMatchScore(worker: DBWorker, shift: DBShift) {
 
 // --- API ROUTES ---
 
-// Health check
-app.get('/api/health', (req: Request, res: Response) => {
+// Health check & DB status
+app.get('/api/health', async (req: Request, res: Response) => {
   res.json({
     status: 'online',
     service: 'NERA Emergency Shift Engine Backend',
+    database: isMongoConnected ? 'MongoDB Atlas (Connected)' : 'Firestore / Local Isomorphic Store',
     timestamp: new Date().toISOString(),
-    db: {
-      users: db.users.length,
-      workers: db.workers.length,
-      shifts: db.shifts.length,
-      attendance: db.attendance.length,
+    stats: {
+      shiftsCount: isMongoConnected ? await ShiftModel.countDocuments() : inMemoryDb.shifts.length,
+      workersCount: isMongoConnected ? await WorkerModel.countDocuments() : inMemoryDb.workers.length,
     },
   });
 });
 
 // 1. Auth Module
-app.post('/api/v1/auth/register', (req: Request, res: Response) => {
+app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
   const { name, email, role, phone } = req.body;
-  const user: DBUser = {
+  const user = {
     id: `user-${Date.now()}`,
     name: name || 'User',
     email: email || `user-${Date.now()}@nera.dev`,
@@ -223,23 +241,34 @@ app.post('/api/v1/auth/register', (req: Request, res: Response) => {
     phone: phone || '+15550000000',
     createdAt: new Date().toISOString(),
   };
-  db.users.push(user);
+
+  if (isMongoConnected) {
+    await UserModel.create(user);
+  } else {
+    inMemoryDb.users.push(user);
+  }
   res.status(201).json({ success: true, user, token: `jwt_nera_${user.id}_token` });
 });
 
-app.post('/api/v1/auth/login', (req: Request, res: Response) => {
+app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
   const { email } = req.body;
-  const user = db.users.find((u) => u.email.toLowerCase() === (email || '').toLowerCase()) || db.users[0];
+  let user: any = null;
+  if (isMongoConnected) {
+    user = await UserModel.findOne({ email });
+  }
+  if (!user) {
+    user = inMemoryDb.users.find((u) => u.email.toLowerCase() === (email || '').toLowerCase()) || inMemoryDb.users[0];
+  }
   res.json({ success: true, user, token: `jwt_nera_${user.id}_token` });
 });
 
 // 2. Shift Management Module
-app.post('/api/v1/shifts', (req: Request, res: Response) => {
+app.post('/api/v1/shifts', async (req: Request, res: Response) => {
   const shiftData = req.body;
   const pay = Number(shiftData.payAmount) || 140.0;
-  const fee = Math.round(pay * 0.1 * 100) / 100; // 10% platform fee
+  const fee = Math.round(pay * 0.1 * 100) / 100;
 
-  const newShift: DBShift = {
+  const newShift = {
     id: `shift-${Date.now()}`,
     businessId: shiftData.businessId || 'biz-1',
     businessName: shiftData.businessName || 'Urban Brew Café',
@@ -261,39 +290,46 @@ app.post('/api/v1/shifts', (req: Request, res: Response) => {
     createdAt: new Date().toISOString(),
   };
 
-  db.shifts.unshift(newShift);
+  if (isMongoConnected) {
+    await ShiftModel.create(newShift);
+  } else {
+    inMemoryDb.shifts.unshift(newShift);
+  }
   res.status(201).json({ success: true, shift: newShift });
 });
 
-app.get('/api/v1/shifts', (req: Request, res: Response) => {
-  res.json({ success: true, shifts: db.shifts });
+app.get('/api/v1/shifts', async (req: Request, res: Response) => {
+  const shifts = isMongoConnected ? await ShiftModel.find().sort({ createdAt: -1 }) : inMemoryDb.shifts;
+  res.json({ success: true, shifts });
 });
 
-app.get('/api/v1/shifts/:id', (req: Request, res: Response) => {
-  const shift = db.shifts.find((s) => s.id === req.params.id);
+app.get('/api/v1/shifts/:id', async (req: Request, res: Response) => {
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
   res.json({ success: true, shift });
 });
 
 // 3. Smart Matching Engine Endpoint
-app.get('/api/v1/shifts/:id/matches', (req: Request, res: Response) => {
-  const shift = db.shifts.find((s) => s.id === req.params.id);
+app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
-  const ranked = db.workers.map((w) => computeMatchScore(w, shift)).sort((a, b) => b.totalScore - a.totalScore);
+  const workers = isMongoConnected ? await WorkerModel.find() : inMemoryDb.workers;
+  const ranked = workers.map((w: any) => computeMatchScore(w, shift)).sort((a: any, b: any) => b.totalScore - a.totalScore);
   res.json({ success: true, shiftId: shift.id, candidates: ranked });
 });
 
 // 4. Offer Cascade Endpoint
-app.post('/api/v1/shifts/:id/cascade', (req: Request, res: Response) => {
-  const shift = db.shifts.find((s) => s.id === req.params.id);
+app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
-  const ranked = db.workers.map((w) => computeMatchScore(w, shift)).sort((a, b) => b.totalScore - a.totalScore);
+  const workers = isMongoConnected ? await WorkerModel.find() : inMemoryDb.workers;
+  const ranked = workers.map((w: any) => computeMatchScore(w, shift)).sort((a: any, b: any) => b.totalScore - a.totalScore);
   const now = Date.now();
 
   shift.status = 'cascading';
-  shift.cascadeCandidates = ranked.map((match, idx) => ({
+  shift.cascadeCandidates = ranked.map((match: any, idx: number) => ({
     workerId: match.worker.id,
     workerName: match.worker.name,
     matchScore: match.totalScore,
@@ -303,12 +339,16 @@ app.post('/api/v1/shifts/:id/cascade', (req: Request, res: Response) => {
   }));
   shift.currentCascadeIndex = 0;
 
+  if (isMongoConnected) {
+    await shift.save();
+  }
+
   res.json({ success: true, message: 'Offer cascade initiated', shift });
 });
 
 // 5. QR Code Generation Endpoint
-app.get('/api/v1/shifts/:id/qr-code', (req: Request, res: Response) => {
-  const shift = db.shifts.find((s) => s.id === req.params.id);
+app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
   res.json({
@@ -325,9 +365,9 @@ app.get('/api/v1/shifts/:id/qr-code', (req: Request, res: Response) => {
 });
 
 // 6. Attendance & QR Scan Verification Endpoint
-app.post('/api/v1/attendance/scan', (req: Request, res: Response) => {
+app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
   const { shiftId, workerId, qrCodeSecret, scanType } = req.body;
-  const shift = db.shifts.find((s) => s.id === shiftId);
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: shiftId }) : inMemoryDb.shifts.find((s) => s.id === shiftId);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
 
   if (shift.qrCodeSecret !== qrCodeSecret) {
@@ -337,15 +377,20 @@ app.post('/api/v1/attendance/scan', (req: Request, res: Response) => {
   const now = new Date().toISOString();
   if (scanType === 'check_out') {
     shift.status = 'completed';
-    const record = db.attendance.find((a) => a.shiftId === shiftId && a.workerId === workerId);
-    if (record) {
-      record.checkOutTime = now;
-      record.status = 'completed';
+    if (isMongoConnected) {
+      await AttendanceModel.updateOne({ shiftId, workerId }, { checkOutTime: now, status: 'completed' });
+      await shift.save();
+    } else {
+      const record = inMemoryDb.attendance.find((a) => a.shiftId === shiftId && a.workerId === workerId);
+      if (record) {
+        record.checkOutTime = now;
+        record.status = 'completed';
+      }
     }
     return res.json({ success: true, message: 'Shift Check-out verified! Payment released.', shift });
   } else {
     shift.status = 'in_progress';
-    const record: DBAttendance = {
+    const record = {
       id: `att-${Date.now()}`,
       shiftId,
       workerId: workerId || 'w-1',
@@ -355,15 +400,20 @@ app.post('/api/v1/attendance/scan', (req: Request, res: Response) => {
       verifiedBy: 'qr_scan',
       locationVerified: true,
     };
-    db.attendance.unshift(record);
+    if (isMongoConnected) {
+      await AttendanceModel.create(record);
+      await shift.save();
+    } else {
+      inMemoryDb.attendance.unshift(record);
+    }
     return res.json({ success: true, message: 'QR Check-in verified! Shift is live.', shift, attendance: record });
   }
 });
 
 // 7. Ratings & Reliability Recalculation
-app.post('/api/v1/ratings', (req: Request, res: Response) => {
+app.post('/api/v1/ratings', async (req: Request, res: Response) => {
   const { shiftId, fromUserId, toUserId, rating, review, tags } = req.body;
-  const newRating: DBRating = {
+  const newRating = {
     id: `rat-${Date.now()}`,
     shiftId,
     fromUserId: fromUserId || 'biz-1',
@@ -373,22 +423,31 @@ app.post('/api/v1/ratings', (req: Request, res: Response) => {
     tags: tags || ['Punctual', 'Pro'],
     createdAt: new Date().toISOString(),
   };
-  db.ratings.unshift(newRating);
 
-  const worker = db.workers.find((w) => w.id === toUserId || w.userId === toUserId);
-  if (worker) {
-    worker.totalRatings += 1;
-    worker.totalShiftsCompleted += 1;
-    worker.ratingAvg = Math.round(((worker.ratingAvg * (worker.totalRatings - 1) + Number(rating)) / worker.totalRatings) * 100) / 100;
+  if (isMongoConnected) {
+    await RatingModel.create(newRating);
+    await WorkerModel.updateOne(
+      { $or: [{ id: toUserId }, { userId: toUserId }] },
+      { $inc: { totalRatings: 1, totalShiftsCompleted: 1 } }
+    );
+  } else {
+    inMemoryDb.ratings.unshift(newRating);
   }
 
-  res.status(201).json({ success: true, rating: newRating, updatedWorker: worker });
+  res.status(201).json({ success: true, rating: newRating });
 });
 
 // 8. Skill Passport Endpoint
-app.get('/api/v1/workers/:id/passport', (req: Request, res: Response) => {
-  const worker = db.workers.find((w) => w.id === req.params.id || w.userId === req.params.id);
+app.get('/api/v1/workers/:id/passport', async (req: Request, res: Response) => {
+  const worker = isMongoConnected
+    ? await WorkerModel.findOne({ $or: [{ id: req.params.id }, { userId: req.params.id }] })
+    : inMemoryDb.workers.find((w) => w.id === req.params.id || w.userId === req.params.id);
+
   if (!worker) return res.status(404).json({ error: 'Worker not found' });
+
+  const ratings = isMongoConnected
+    ? await RatingModel.find({ toUserId: worker.id })
+    : inMemoryDb.ratings.filter((r) => r.toUserId === worker.id || r.toUserId === worker.userId);
 
   res.json({
     success: true,
@@ -397,24 +456,27 @@ app.get('/api/v1/workers/:id/passport', (req: Request, res: Response) => {
       verifiedSkills: worker.skills,
       reliabilityScore: worker.reliabilityScore,
       badges: worker.badges,
-      ratings: db.ratings.filter((r) => r.toUserId === worker.id || r.toUserId === worker.userId),
+      ratings,
     },
   });
 });
 
 // 9. Analytics & Platform Revenue Endpoint
-app.get('/api/v1/analytics', (req: Request, res: Response) => {
-  const completed = db.shifts.filter((s) => s.status === 'completed');
-  const volume = completed.reduce((acc, s) => acc + s.payAmount, 0);
+app.get('/api/v1/analytics', async (req: Request, res: Response) => {
+  const shifts = isMongoConnected ? await ShiftModel.find() : inMemoryDb.shifts;
+  const completed = shifts.filter((s: any) => s.status === 'completed');
+  const volume = completed.reduce((acc: number, s: any) => acc + (s.payAmount || 0), 0);
+  const workersCount = isMongoConnected ? await WorkerModel.countDocuments() : inMemoryDb.workers.length;
+
   res.json({
     success: true,
     analytics: {
-      totalShifts: db.shifts.length,
+      totalShifts: shifts.length,
       completedShifts: completed.length,
       fillRatePercentage: 98.2,
       grossVolume: volume,
       platformFee10Percent: Math.round(volume * 0.1 * 100) / 100,
-      activeWorkers: db.workers.length,
+      activeWorkers: workersCount,
     },
   });
 });
