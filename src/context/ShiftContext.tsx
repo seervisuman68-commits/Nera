@@ -1,8 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useTransition } from 'react';
 import type { Shift, Worker, AttendanceRecord, Rating, PlatformAnalytics, CascadeCandidate, ShiftStatus } from '../types';
-import { mockShifts, mockWorkers, mockAttendance, mockRatings } from '../data/mockData';
 import { rankWorkersForShift } from '../utils/matchingEngine';
 import { calculateReliabilityScore } from '../utils/reliabilityScore';
+import {
+  createFirestoreShift,
+  updateFirestoreShift,
+  createFirestoreWorker,
+  updateFirestoreWorker,
+  recordFirestoreAttendance,
+  createFirestoreRating,
+} from '../services/firestoreService';
 
 interface ShiftContextType {
   shifts: Shift[];
@@ -11,6 +18,9 @@ interface ShiftContextType {
   ratings: Rating[];
   analytics: PlatformAnalytics;
   createShift: (shiftData: Partial<Shift>) => Shift;
+  addWorker: (workerData: Partial<Worker>) => Worker;
+  deleteShift: (shiftId: string) => void;
+  clearAllData: () => void;
   startOfferCascade: (shiftId: string, candidateWorkerIds?: string[]) => void;
   acceptShiftOffer: (shiftId: string, workerId: string) => void;
   declineShiftOffer: (shiftId: string, workerId: string) => void;
@@ -29,22 +39,22 @@ const ShiftContext = createContext<ShiftContextType | undefined>(undefined);
 export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [shifts, setShifts] = useState<Shift[]>(() => {
     const saved = localStorage.getItem('nera_shifts');
-    return saved ? JSON.parse(saved) : mockShifts;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [workers, setWorkers] = useState<Worker[]>(() => {
     const saved = localStorage.getItem('nera_workers');
-    return saved ? JSON.parse(saved) : mockWorkers;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>(() => {
     const saved = localStorage.getItem('nera_attendance');
-    return saved ? JSON.parse(saved) : mockAttendance;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [ratings, setRatings] = useState<Rating[]>(() => {
     const saved = localStorage.getItem('nera_ratings');
-    return saved ? JSON.parse(saved) : mockRatings;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [, startTransition] = useTransition();
@@ -66,7 +76,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('nera_ratings', JSON.stringify(ratings));
   }, [ratings]);
 
-  // Offer cascade timer tick: auto-expire pending candidate after 2 minutes (or simulate timeout)
+  // Offer cascade timer tick
   useEffect(() => {
     const interval = setInterval(() => {
       setShifts((prevShifts): Shift[] => {
@@ -82,7 +92,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               const expiresAtMs = new Date(currentCandidate.expiresAt).getTime();
               if (now >= expiresAtMs) {
                 changed = true;
-                // Timeout Candidate! Advance to next candidate
                 const updatedCandidates: CascadeCandidate[] = [...shift.cascadeCandidates];
                 updatedCandidates[currentIndex] = {
                   ...currentCandidate,
@@ -91,7 +100,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
                 const nextIndex = currentIndex + 1;
                 if (nextIndex < updatedCandidates.length) {
-                  const nextExpires = new Date(now + 120000).toISOString(); // 2 minutes window
+                  const nextExpires = new Date(now + 120000).toISOString();
                   updatedCandidates[nextIndex] = {
                     ...updatedCandidates[nextIndex],
                     status: 'offered',
@@ -105,7 +114,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     currentCascadeIndex: nextIndex,
                   };
                 } else {
-                  // End of cascade, nobody accepted
                   return {
                     ...shift,
                     status: 'open' as ShiftStatus,
@@ -127,21 +135,21 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const createShift = (shiftData: Partial<Shift>): Shift => {
     const pay = shiftData.payAmount || 120.0;
-    const fee = Math.round(pay * 0.10 * 100) / 100; // 10% platform fee
+    const fee = Math.round(pay * 0.10 * 100) / 100;
     const total = pay + fee;
 
     const newShift: Shift = {
       id: `shift-${Date.now()}`,
-      businessId: shiftData.businessId || 'biz-1',
-      businessName: shiftData.businessName || 'Urban Brew Café',
+      businessId: shiftData.businessId || `biz-${Date.now()}`,
+      businessName: shiftData.businessName || 'My Business',
       businessCategory: shiftData.businessCategory || 'café',
-      role: shiftData.role || 'Senior Barista',
-      requiredSkills: shiftData.requiredSkills || ['Barista', 'POS Operations'],
+      role: shiftData.role || 'Shift Role',
+      requiredSkills: shiftData.requiredSkills || ['Customer Service'],
       date: shiftData.date || new Date().toISOString().split('T')[0],
-      startTime: shiftData.startTime || '12:00 PM',
+      startTime: shiftData.startTime || '09:00 AM',
       endTime: shiftData.endTime || '05:00 PM',
       location: shiftData.location || {
-        address: '142 Mercer St, Soho, NY',
+        address: '123 Main Street',
         latitude: 40.7248,
         longitude: -73.9984,
       },
@@ -150,7 +158,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       platformFee: fee,
       totalCost: total,
       urgency: shiftData.urgency || 'EMERGENCY (Immediate)',
-      notes: shiftData.notes || 'Emergency shift replacement needed immediately.',
+      notes: shiftData.notes || '',
       status: 'open',
       cascadeCandidates: [],
       currentCascadeIndex: 0,
@@ -162,7 +170,61 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setShifts((prev) => [newShift, ...prev]);
     });
 
+    createFirestoreShift(newShift).catch(console.warn);
+
     return newShift;
+  };
+
+  const addWorker = (workerData: Partial<Worker>): Worker => {
+    const newWorker: Worker = {
+      id: `worker-${Date.now()}`,
+      userId: workerData.userId || `user-${Date.now()}`,
+      name: workerData.name || 'New Worker',
+      role: workerData.role || 'Staff',
+      avatar: workerData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      phone: workerData.phone || '+1 (555) 000-0000',
+      bio: workerData.bio || 'Verified professional.',
+      skills: workerData.skills || ['Customer Service'],
+      experienceYears: workerData.experienceYears || 2,
+      reliabilityScore: workerData.reliabilityScore || 96.0,
+      isAvailable: workerData.isAvailable !== undefined ? workerData.isAvailable : true,
+      availabilityStatus: workerData.availabilityStatus || 'Available Now',
+      location: workerData.location || {
+        latitude: 40.7285,
+        longitude: -73.9942,
+        address: 'Downtown (1.0 km away)',
+      },
+      verificationStatus: workerData.verificationStatus || 'verified',
+      ratingAvg: workerData.ratingAvg || 5.0,
+      totalRatings: workerData.totalRatings || 1,
+      totalShiftsCompleted: workerData.totalShiftsCompleted || 0,
+      hourlyRate: workerData.hourlyRate || 25.0,
+      badges: workerData.badges || ['Verified Passport ✅', 'Quick Responder ⚡'],
+      punctualityRate: workerData.punctualityRate || 100,
+      completionRate: workerData.completionRate || 100,
+      cancellationRate: workerData.cancellationRate || 0,
+      earningsTotal: workerData.earningsTotal || 0,
+    };
+
+    setWorkers((prev) => [newWorker, ...prev]);
+    createFirestoreWorker(newWorker).catch(console.warn);
+
+    return newWorker;
+  };
+
+  const deleteShift = (shiftId: string) => {
+    setShifts((prev) => prev.filter((s) => s.id !== shiftId));
+  };
+
+  const clearAllData = () => {
+    setShifts([]);
+    setWorkers([]);
+    setAttendanceLogs([]);
+    setRatings([]);
+    localStorage.removeItem('nera_shifts');
+    localStorage.removeItem('nera_workers');
+    localStorage.removeItem('nera_attendance');
+    localStorage.removeItem('nera_ratings');
   };
 
   const startOfferCascade = (shiftId: string, candidateWorkerIds?: string[]) => {
@@ -185,7 +247,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               };
             });
           } else {
-            // Auto calculate smart matching ranking
             const ranked = rankWorkersForShift(workers, shift);
             rankedCandidates = ranked.map((match, idx) => ({
               workerId: match.worker.id,
@@ -198,12 +259,16 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }));
           }
 
-          return {
+          const updatedShift: Shift = {
             ...shift,
             status: 'cascading' as ShiftStatus,
             cascadeCandidates: rankedCandidates,
             currentCascadeIndex: 0,
           };
+
+          updateFirestoreShift(shiftId, updatedShift).catch(console.warn);
+
+          return updatedShift;
         }
         return shift;
       });
@@ -224,11 +289,10 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return c;
           });
 
-          // Backup worker logic: pick the next eligible candidate from the cascade list as backup!
           const otherCandidates = shift.cascadeCandidates.filter((c) => c.workerId !== workerId);
           const backupWorker = otherCandidates.length > 0 ? workers.find((w) => w.id === otherCandidates[0].workerId) : undefined;
 
-          return {
+          const updatedShift: Shift = {
             ...shift,
             status: 'assigned' as ShiftStatus,
             assignedWorkerId: worker.id,
@@ -237,12 +301,15 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             backupWorkerName: backupWorker?.name,
             cascadeCandidates: updatedCandidates,
           };
+
+          updateFirestoreShift(shiftId, updatedShift).catch(console.warn);
+
+          return updatedShift;
         }
         return shift;
       });
     });
 
-    // Mark worker active
     setWorkers((prevWorkers) =>
       prevWorkers.map((w) => (w.id === workerId ? { ...w, activeShiftId: shiftId } : w))
     );
@@ -361,6 +428,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     setAttendanceLogs((prev) => [newAttendance, ...prev]);
+    recordFirestoreAttendance(newAttendance).catch(console.warn);
 
     return { success: true, message: `Check-in verified at ${shift.businessName}! Shift is now live.` };
   };
@@ -383,18 +451,19 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       )
     );
 
-    // Update worker earnings and shifts completed
     setWorkers((prevWorkers) =>
       prevWorkers.map((w) => {
         if (w.id === workerId) {
           const totalShifts = w.totalShiftsCompleted + 1;
           const newEarnings = w.earningsTotal + shift.payAmount;
-          return {
+          const updated = {
             ...w,
             totalShiftsCompleted: totalShifts,
             earningsTotal: newEarnings,
             activeShiftId: undefined,
           };
+          updateFirestoreWorker(workerId, updated).catch(console.warn);
+          return updated;
         }
         return w;
       })
@@ -421,8 +490,8 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     setRatings((prev) => [newRating, ...prev]);
+    createFirestoreRating(newRating).catch(console.warn);
 
-    // Recalculate Worker reliability score & average rating
     setWorkers((prevWorkers) =>
       prevWorkers.map((w) => {
         if (w.id === shift.assignedWorkerId) {
@@ -438,12 +507,16 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             noShows: 0,
           });
 
-          return {
+          const updatedWorker = {
             ...w,
             ratingAvg: Math.round(newAvg * 100) / 100,
             totalRatings: newTotalRatings,
             reliabilityScore: newReliability,
           };
+
+          updateFirestoreWorker(w.id, updatedWorker).catch(console.warn);
+
+          return updatedWorker;
         }
         return w;
       })
@@ -454,6 +527,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setWorkers((prev) =>
       prev.map((w) => (w.id === workerId ? { ...w, verificationStatus: status } : w))
     );
+    updateFirestoreWorker(workerId, { verificationStatus: status }).catch(console.warn);
   };
 
   const getShiftById = (id: string) => shifts.find((s) => s.id === id);
@@ -471,7 +545,6 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return null;
   };
 
-  // Analytics computation
   const totalVolumeGross = shifts.reduce((acc, s) => acc + (s.status === 'completed' ? s.payAmount : 0), 0);
   const platformRevenueFee = Math.round(totalVolumeGross * 0.10 * 100) / 100;
   const completedCount = shifts.filter((s) => s.status === 'completed').length;
@@ -482,7 +555,7 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     totalShifts: shifts.length,
     completedShifts: completedCount,
     activeShifts: activeCount,
-    averageMatchTimeSeconds: 142, // ~2.3 minutes emergency match
+    averageMatchTimeSeconds: 142,
     fillRatePercentage: 98.2,
     totalVolumeGross,
     platformRevenueFee,
@@ -500,6 +573,9 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ratings,
         analytics,
         createShift,
+        addWorker,
+        deleteShift,
+        clearAllData,
         startOfferCascade,
         acceptShiftOffer,
         declineShiftOffer,
