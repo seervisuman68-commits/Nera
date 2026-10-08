@@ -40,7 +40,16 @@ export const RatingModal: React.FC<RatingModalProps> = ({ shift, isOpen, onClose
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    submitShiftRating(shift.id, rating, review, selectedTags);
+    submitShiftRating({
+      shiftId: shift.id,
+      fromUserId: shift.businessId,
+      fromUserName: shift.businessName,
+      toUserId: shift.assignedWorkerId || '',
+      toUserName: shift.assignedWorkerName || '',
+      rating,
+      review,
+      tags: selectedTags,
+    });
     try {
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
     } catch {}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useShifts } from '../../context/ShiftContext';
 import { Worker, AvailabilityStatus } from '../../types';
-import { UserPlus, X, CheckCircle2, Sparkles, MapPin, DollarSign, Award } from 'lucide-react';
+import { UserPlus, X, CheckCircle2, Sparkles, MapPin, Award } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface AddWorkerModalProps {
@@ -15,10 +15,10 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('Specialty Barista');
-  const [hourlyRate, setHourlyRate] = useState<number>(28);
+  const [hourlyRate, setHourlyRate] = useState<number>(350);
   const [experienceYears, setExperienceYears] = useState<number>(3);
   const [reliabilityScore, setReliabilityScore] = useState<number>(98);
-  const [address, setAddress] = useState('Soho, New York (0.5 km)');
+  const [address, setAddress] = useState('Indiranagar, Bengaluru (0.5 km)');
   const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus>('Available Now');
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['Barista', 'POS Operations', 'Latte Art']);
 
@@ -46,10 +46,10 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const created = addWorker({
+    const created = await addWorker({
       name: name || 'Test Worker',
       role,
       hourlyRate,
@@ -59,8 +59,8 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
       isAvailable: availabilityStatus === 'Available Now',
       skills: selectedSkills,
       location: {
-        latitude: 40.7248,
-        longitude: -73.9984,
+        latitude: 12.9716,
+        longitude: 77.5946,
         address,
       },
       avatar: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 500)}?w=150&auto=format&fit=crop&q=80`,
@@ -121,12 +121,13 @@ export const AddWorkerModal: React.FC<AddWorkerModalProps> = ({ isOpen, onClose,
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Hourly Pay ($/hr)
+                Hourly Pay (₹/hr)
               </label>
               <input
                 type="number"
-                min={15}
-                max={100}
+                min={150}
+                max={2500}
+                step={25}
                 value={hourlyRate}
                 onChange={(e) => setHourlyRate(Number(e.target.value))}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-900"

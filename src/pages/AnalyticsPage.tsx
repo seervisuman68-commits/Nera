@@ -1,11 +1,11 @@
 import React from 'react';
 import { useShifts } from '../context/ShiftContext';
+import { formatINR } from '../utils/currency';
 import {
   BarChart3,
   TrendingUp,
   Clock,
   CheckCircle2,
-  DollarSign,
   ShieldCheck,
   Zap,
   Users,
@@ -55,9 +55,9 @@ export const AnalyticsPage: React.FC = () => {
         <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-xs font-bold uppercase">Total Platform Volume</span>
-            <DollarSign className="w-5 h-5 text-indigo-500" />
+            <TrendingUp className="w-5 h-5 text-indigo-500" />
           </div>
-          <div className="text-3xl font-black text-slate-900 mt-2">${analytics.totalVolumeGross}</div>
+          <div className="text-3xl font-black text-slate-900 mt-2">{formatINR(analytics.totalVolumeGross)}</div>
           <div className="text-xs text-slate-500 mt-1">Gross worker compensation</div>
         </div>
 
@@ -66,7 +66,7 @@ export const AnalyticsPage: React.FC = () => {
             <span className="text-xs font-bold uppercase">NERA 10% Platform Fee</span>
             <Zap className="w-5 h-5 text-amber-500" />
           </div>
-          <div className="text-3xl font-black text-indigo-600 mt-2">${analytics.platformRevenueFee}</div>
+          <div className="text-3xl font-black text-indigo-600 mt-2">{formatINR(analytics.platformRevenueFee)}</div>
           <div className="text-xs text-emerald-600 font-semibold mt-1">100% automated revenue</div>
         </div>
       </div>

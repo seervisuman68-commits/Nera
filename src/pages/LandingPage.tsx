@@ -15,8 +15,7 @@ import {
   TrendingUp,
   Flame,
   AlertCircle,
-  HelpCircle,
-  DollarSign
+  HelpCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useShifts } from '../context/ShiftContext';
@@ -33,7 +32,7 @@ export const LandingPage: React.FC = () => {
       tagline: 'Never close your espresso bar during morning rush.',
       sampleRole: 'Senior Barista & Latte Artist',
       avgTime: '4.2 mins',
-      rate: '$26 - $32/hr',
+      rate: '₹350 - ₹500/hr',
       verifiedSkills: ['Espresso Calibration', 'Latte Art', 'Square / Toast POS', 'Rush Line Management'],
     },
     restaurant: {
@@ -41,7 +40,7 @@ export const LandingPage: React.FC = () => {
       tagline: 'Instant line cooks, prep staff & servers when absences hit.',
       sampleRole: 'Line Cook / Sauté Specialist',
       avgTime: '6.5 mins',
-      rate: '$24 - $30/hr',
+      rate: '₹300 - ₹450/hr',
       verifiedSkills: ['ServSafe Certified', 'Grill & Fryer', 'Food Safety', 'Prep Speed'],
     },
     retail: {
@@ -49,7 +48,7 @@ export const LandingPage: React.FC = () => {
       tagline: 'Reliable floor associates and cashier leads on-demand.',
       sampleRole: 'Retail Specialist & Cashier Lead',
       avgTime: '5.1 mins',
-      rate: '$22 - $26/hr',
+      rate: '₹250 - ₹350/hr',
       verifiedSkills: ['Shopify POS', 'Inventory Counting', 'Customer Success', 'Visual Merchandising'],
     },
     salon: {
@@ -57,7 +56,7 @@ export const LandingPage: React.FC = () => {
       tagline: 'Fill assistant & receptionist gaps with pre-screened talent.',
       sampleRole: 'Salon Assistant / Receptionist',
       avgTime: '7.0 mins',
-      rate: '$20 - $25/hr',
+      rate: '₹220 - ₹300/hr',
       verifiedSkills: ['Appointment Scheduling', 'Client Reception', 'Sanitation', 'Blowout Assist'],
     },
   };

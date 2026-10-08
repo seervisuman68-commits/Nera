@@ -6,6 +6,7 @@ import { Shift, Worker } from '../types';
 import { CascadeStatusWidget } from '../components/cascade/CascadeStatusWidget';
 import { QRGeneratorModal } from '../components/qr/QRGeneratorModal';
 import { RatingModal } from '../components/rating/RatingModal';
+import { formatINR, formatHourlyINR } from '../utils/currency';
 import {
   PlusCircle,
   Zap,
@@ -14,7 +15,6 @@ import {
   Users,
   QrCode,
   Star,
-  DollarSign,
   AlertTriangle,
   ArrowRight,
   ShieldCheck,
@@ -103,10 +103,10 @@ export const BusinessDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase">Total Shift Spend</span>
             <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600 font-bold">
-              <DollarSign className="w-4 h-4" />
+              <TrendingUp className="w-4 h-4" />
             </span>
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-2">${totalSpent.toFixed(2)}</div>
+          <div className="text-2xl font-black text-slate-900 mt-2">{formatINR(totalSpent)}</div>
           <div className="text-[11px] text-slate-500 mt-1">Includes 10% platform fee</div>
         </div>
 
@@ -169,7 +169,7 @@ export const BusinessDashboard: React.FC = () => {
                       <h3 className="font-bold text-base text-slate-900">{shift.role}</h3>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      📅 {shift.date} • ⏱️ {shift.startTime} - {shift.endTime} • 💰 ${shift.payAmount} (${shift.hourlyRate}/hr)
+                      📅 {shift.date} • ⏱️ {shift.startTime} - {shift.endTime} • 💰 {formatINR(shift.payAmount)} ({formatHourlyINR(shift.hourlyRate)})
                     </p>
                   </div>
 
@@ -246,8 +246,8 @@ export const BusinessDashboard: React.FC = () => {
 
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <span className="text-sm font-bold text-slate-900">${s.payAmount}</span>
-                      <span className="block text-[10px] text-slate-400 font-mono">Paid (${s.platformFee} Fee)</span>
+                      <span className="text-sm font-bold text-slate-900">{formatINR(s.payAmount)}</span>
+                      <span className="block text-[10px] text-slate-400 font-mono">Paid ({formatINR(s.platformFee)} Fee)</span>
                     </div>
 
                     {ratingForShift ? (

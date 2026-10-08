@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useShifts } from '../context/ShiftContext';
+import { formatINR, formatHourlyINR } from '../utils/currency';
 import {
   Bell,
   Clock,
-  DollarSign,
   MapPin,
   Building,
   CheckCircle2,
@@ -152,9 +152,9 @@ export const ShiftOfferPage: React.FC = () => {
 
               <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-right sm:text-right">
                 <span className="text-[10px] uppercase font-bold text-emerald-800 block">Total Shift Compensation</span>
-                <span className="text-3xl font-black text-emerald-600">${currentShift.payAmount}</span>
+                <span className="text-3xl font-black text-emerald-600">{formatINR(currentShift.payAmount)}</span>
                 <span className="block text-xs font-semibold text-emerald-700 mt-0.5">
-                  (${currentShift.hourlyRate}/hr • Guaranteed)
+                  ({formatHourlyINR(currentShift.hourlyRate)} • Guaranteed)
                 </span>
               </div>
             </div>
@@ -216,7 +216,7 @@ export const ShiftOfferPage: React.FC = () => {
                 className="w-full sm:flex-1 py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-base shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all"
               >
                 <Sparkles className="w-5 h-5" />
-                <span>Accept Shift (${currentShift.payAmount})</span>
+                <span>Accept Shift ({formatINR(currentShift.payAmount)})</span>
               </button>
 
               <button

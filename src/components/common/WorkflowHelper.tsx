@@ -41,10 +41,10 @@ export const WorkflowHelper: React.FC = () => {
       skills: ['Barista', 'POS Operations', 'Latte Art', 'Espresso Calibration'],
       experienceYears: 4,
       reliabilityScore: 98.4,
-      hourlyRate: 28,
+      hourlyRate: 350,
       availabilityStatus: 'Available Now',
       isAvailable: true,
-      location: { latitude: 40.7285, longitude: -73.9942, address: 'East Village (0.8 km)' },
+      location: { latitude: 12.9785, longitude: 77.6402, address: 'Indiranagar (0.8 km)' },
     });
 
     const w2 = addWorker({
@@ -53,10 +53,10 @@ export const WorkflowHelper: React.FC = () => {
       skills: ['Barista', 'POS Operations', 'Customer Service'],
       experienceYears: 2.5,
       reliabilityScore: 94.0,
-      hourlyRate: 24,
+      hourlyRate: 300,
       availabilityStatus: 'Available Now',
       isAvailable: true,
-      location: { latitude: 40.7321, longitude: -74.0012, address: 'Greenwich Village (1.2 km)' },
+      location: { latitude: 12.9352, longitude: 77.6245, address: 'Koramangala (1.2 km)' },
     });
 
     const w3 = addWorker({
@@ -65,10 +65,10 @@ export const WorkflowHelper: React.FC = () => {
       skills: ['Line Cook', 'Food Prep', 'ServSafe Certified'],
       experienceYears: 3,
       reliabilityScore: 96.0,
-      hourlyRate: 26,
+      hourlyRate: 320,
       availabilityStatus: 'Available Now',
       isAvailable: true,
-      location: { latitude: 40.7380, longitude: -73.9880, address: 'Gramercy (1.8 km)' },
+      location: { latitude: 12.9121, longitude: 77.6446, address: 'HSR Layout (1.8 km)' },
     });
 
     switchDemoUser('user-b1');

@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useShifts } from '../context/ShiftContext';
 import { ShiftUrgency } from '../types';
+import { formatINR } from '../utils/currency';
 import {
   Zap,
   Clock,
   MapPin,
-  DollarSign,
   Sparkles,
   CheckCircle2,
   ShieldCheck,
@@ -26,10 +26,10 @@ export const CreateShiftPage: React.FC = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('01:00 PM');
   const [endTime, setEndTime] = useState('06:00 PM');
-  const [address, setAddress] = useState(currentBusiness?.address || '142 Mercer St, Soho, New York, NY 10012');
-  const [latitude, setLatitude] = useState<number>(currentBusiness?.location.latitude || 40.7248);
-  const [longitude, setLongitude] = useState<number>(currentBusiness?.location.longitude || -73.9984);
-  const [hourlyRate, setHourlyRate] = useState<number>(28);
+  const [address, setAddress] = useState(currentBusiness?.address || '12th Main Road, Indiranagar, Bengaluru, Karnataka 560038');
+  const [latitude, setLatitude] = useState<number>(currentBusiness?.location.latitude || 12.9716);
+  const [longitude, setLongitude] = useState<number>(currentBusiness?.location.longitude || 77.5946);
+  const [hourlyRate, setHourlyRate] = useState<number>(350);
   const [hours, setHours] = useState<number>(5);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['Barista', 'POS Operations', 'Latte Art']);
   const [notes, setNotes] = useState('Morning barista had a family emergency. Need an experienced espresso pro for the midday rush.');
@@ -37,23 +37,23 @@ export const CreateShiftPage: React.FC = () => {
   const rolePresets: Record<string, { skills: string[]; defaultRate: number }> = {
     'Senior Barista': {
       skills: ['Barista', 'POS Operations', 'Latte Art', 'Espresso Calibration'],
-      defaultRate: 28,
+      defaultRate: 350,
     },
     'Line Cook': {
       skills: ['Line Cook', 'Food Prep', 'ServSafe Certified', 'Grill & Fryer'],
-      defaultRate: 26,
+      defaultRate: 300,
     },
     'Retail Specialist': {
       skills: ['Retail Sales', 'POS Operations', 'Customer Service', 'Inventory Count'],
-      defaultRate: 24,
+      defaultRate: 250,
     },
     'Server / Host': {
       skills: ['Server', 'Table Service', 'Toast POS', 'Wine Knowledge'],
-      defaultRate: 23,
+      defaultRate: 250,
     },
     'Salon Assistant': {
       skills: ['Salon Assist', 'Customer Service', 'Sanitation', 'Appointment Desk'],
-      defaultRate: 22,
+      defaultRate: 220,
     },
   };
 
@@ -77,10 +77,10 @@ export const CreateShiftPage: React.FC = () => {
   const platformFee = Math.round(shiftPay * 0.10 * 100) / 100; // 10% Platform fee
   const totalCost = shiftPay + platformFee;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const created = createShift({
+    const created = await createShift({
       businessId: currentBusiness?.id || 'biz-1',
       businessName: currentBusiness?.companyName || 'Urban Brew Café',
       businessCategory: currentBusiness?.category || 'café',
@@ -260,12 +260,13 @@ export const CreateShiftPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Hourly Worker Pay ($/hr)
+                Hourly Worker Pay (₹/hr)
               </label>
               <input
                 type="number"
-                min={15}
-                max={100}
+                min={150}
+                max={2500}
+                step={25}
                 value={hourlyRate}
                 onChange={(e) => setHourlyRate(Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500"
@@ -291,13 +292,13 @@ export const CreateShiftPage: React.FC = () => {
             <div className="space-y-1 text-center sm:text-left">
               <span className="text-[11px] text-slate-400 font-medium">Automatic Escrow Calculation:</span>
               <div className="text-xs text-slate-300">
-                Worker Pay: <strong className="text-white">${shiftPay.toFixed(2)}</strong> + NERA Fee (10%):{' '}
-                <strong className="text-indigo-300">${platformFee.toFixed(2)}</strong>
+                Worker Pay: <strong className="text-white">{formatINR(shiftPay)}</strong> + NERA Fee (10%):{' '}
+                <strong className="text-indigo-300">{formatINR(platformFee)}</strong>
               </div>
             </div>
             <div className="text-center sm:text-right">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Shift Budget</span>
-              <span className="text-2xl font-black text-emerald-400">${totalCost.toFixed(2)}</span>
+              <span className="text-2xl font-black text-emerald-400">{formatINR(totalCost)}</span>
             </div>
           </div>
         </div>

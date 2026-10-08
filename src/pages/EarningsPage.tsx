@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useShifts } from '../context/ShiftContext';
+import { formatINR, formatHourlyINR } from '../utils/currency';
 import {
-  DollarSign,
   TrendingUp,
   ArrowUpRight,
   Clock,
@@ -62,7 +62,7 @@ export const EarningsPage: React.FC = () => {
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between animate-fade-in shadow-xs">
           <div className="flex items-center gap-2 text-xs font-bold">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            <span>Instant transfer of ${availableBalance.toFixed(2)} dispatched to your linked bank account! (Demo)</span>
+            <span>Instant transfer of {formatINR(availableBalance)} dispatched to your linked bank account! (Demo)</span>
           </div>
           <span className="text-[10px] font-bold uppercase bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
             Paid in 30s
@@ -75,7 +75,7 @@ export const EarningsPage: React.FC = () => {
         <div>
           <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">Available For Transfer</span>
           <div className="text-4xl sm:text-5xl font-black text-white mt-1">
-            ${availableBalance.toFixed(2)}
+            {formatINR(availableBalance)}
           </div>
           <p className="text-xs text-emerald-200 mt-2 flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -99,13 +99,13 @@ export const EarningsPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs font-bold text-slate-400 uppercase">Total Lifetime Paid</span>
-          <div className="text-2xl font-black text-slate-900 mt-1">${currentWorker.earningsTotal}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{formatINR(currentWorker.earningsTotal)}</div>
           <div className="text-[11px] text-emerald-600 font-semibold mt-1">From {currentWorker.totalShiftsCompleted} shifts</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs font-bold text-slate-400 uppercase">Avg Emergency Hourly Rate</span>
-          <div className="text-2xl font-black text-blue-600 mt-1">${currentWorker.hourlyRate}/hr</div>
+          <div className="text-2xl font-black text-blue-600 mt-1">{formatHourlyINR(currentWorker.hourlyRate)}</div>
           <div className="text-[11px] text-slate-500 mt-1">Premium emergency surge included</div>
         </div>
 
@@ -150,9 +150,9 @@ export const EarningsPage: React.FC = () => {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-base font-black text-emerald-600">+${s.payAmount}.00</div>
+                  <div className="text-base font-black text-emerald-600">+{formatINR(s.payAmount)}</div>
                   <div className="text-[10px] text-slate-400 font-mono">
-                    {s.startTime} - {s.endTime} (${s.hourlyRate}/hr)
+                    {s.startTime} - {s.endTime} ({formatHourlyINR(s.hourlyRate)})
                   </div>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useShifts } from '../context/ShiftContext';
 import { rankWorkersForShift } from '../utils/matchingEngine';
+import { formatINR, formatHourlyINR } from '../utils/currency';
 import {
   Zap,
   ShieldCheck,
@@ -71,7 +72,7 @@ export const SmartMatchResultsPage: React.FC = () => {
             Top Verified Candidates for {shift.role}
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 mt-1">
-            📍 {shift.location.address} • ⏰ {shift.startTime} - {shift.endTime} • 💰 ${shift.payAmount}
+            📍 {shift.location.address} • ⏰ {shift.startTime} - {shift.endTime} • 💰 {formatINR(shift.payAmount)}
           </p>
         </div>
 
@@ -163,7 +164,7 @@ export const SmartMatchResultsPage: React.FC = () => {
                         {w.reliabilityScore}% Reliability ({w.punctualityRate}% On-Time)
                       </span>
                       <span className="font-semibold text-slate-800">
-                        ${w.hourlyRate}/hr rate
+                        {formatHourlyINR(w.hourlyRate)}
                       </span>
                     </div>
                   </div>

@@ -5,12 +5,12 @@ import { useShifts } from '../context/ShiftContext';
 import { AvailabilityStatus, Shift } from '../types';
 import { QRScannerModal } from '../components/qr/QRScannerModal';
 import { AddWorkerModal } from '../components/workers/AddWorkerModal';
+import { formatINR, formatHourlyINR } from '../utils/currency';
 import {
   UserCheck,
   Zap,
   ShieldCheck,
   Clock,
-  DollarSign,
   Award,
   QrCode,
   MapPin,
@@ -65,7 +65,7 @@ export const WorkerDashboard: React.FC = () => {
                 Urgent Offer: {activeOffer.shift.role} at {activeOffer.shift.businessName}
               </h2>
               <p className="text-xs text-rose-100">
-                💰 ${activeOffer.shift.payAmount} (${activeOffer.shift.hourlyRate}/hr) • 📍 {activeOffer.shift.location.address}
+                💰 {formatINR(activeOffer.shift.payAmount)} ({formatHourlyINR(activeOffer.shift.hourlyRate)}) • 📍 {activeOffer.shift.location.address}
               </p>
             </div>
           </div>
@@ -74,7 +74,7 @@ export const WorkerDashboard: React.FC = () => {
             to="/shift-offers"
             className="px-6 py-3 rounded-2xl bg-white text-rose-700 font-black text-sm shadow-lg hover:bg-rose-50 transition-all shrink-0 flex items-center gap-2"
           >
-            <span>Review & Accept ($ {activeOffer.shift.payAmount})</span>
+            <span>Review & Accept ({formatINR(activeOffer.shift.payAmount)})</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -197,10 +197,10 @@ export const WorkerDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-500 uppercase">Total Earnings</span>
               <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600 font-bold">
-                <DollarSign className="w-4 h-4" />
+                <TrendingUp className="w-4 h-4" />
               </span>
             </div>
-            <div className="text-2xl font-black text-slate-900 mt-2">${currentWorker.earningsTotal}</div>
+            <div className="text-2xl font-black text-slate-900 mt-2">{formatINR(currentWorker.earningsTotal)}</div>
             <div className="text-[11px] text-slate-500 mt-1">Instant Payouts Eligible</div>
           </div>
         </div>
@@ -221,7 +221,7 @@ export const WorkerDashboard: React.FC = () => {
             </div>
 
             <div className="text-right">
-              <span className="text-2xl font-black text-emerald-600">${activeAssignedShift.payAmount}</span>
+              <span className="text-2xl font-black text-emerald-600">{formatINR(activeAssignedShift.payAmount)}</span>
               <span className="block text-xs text-slate-400">Guaranteed Pay</span>
             </div>
           </div>
@@ -301,7 +301,7 @@ export const WorkerDashboard: React.FC = () => {
           className="p-6 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-indigo-400 transition-all space-y-2 group"
         >
           <div className="p-3 bg-indigo-50 rounded-xl w-fit text-indigo-600 group-hover:scale-110 transition-transform">
-            <DollarSign className="w-6 h-6" />
+            <TrendingUp className="w-6 h-6" />
           </div>
           <h3 className="font-bold text-slate-900 text-base">Earnings & Payouts</h3>
           <p className="text-xs text-slate-500">

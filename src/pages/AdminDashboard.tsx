@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useShifts } from '../context/ShiftContext';
+import { formatINR } from '../utils/currency';
 import {
   ShieldCheck,
   TrendingUp,
-  DollarSign,
   Users,
   Zap,
   CheckCircle2,
@@ -38,7 +38,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="p-3 bg-purple-900/50 rounded-2xl border border-purple-700/50 text-center">
             <span className="text-[10px] uppercase font-bold text-purple-300 block">NERA 10% Commission</span>
-            <span className="text-xl font-black text-emerald-400">${analytics.platformRevenueFee}</span>
+            <span className="text-xl font-black text-emerald-400">{formatINR(analytics.platformRevenueFee)}</span>
           </div>
         </div>
       </div>
@@ -47,7 +47,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-xs font-bold text-slate-400 uppercase">Gross Platform Volume</span>
-          <div className="text-2xl font-black text-slate-900 mt-1">${analytics.totalVolumeGross}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{formatINR(analytics.totalVolumeGross)}</div>
           <div className="text-[11px] text-emerald-600 font-semibold mt-1">10% Platform Cut Unlocked</div>
         </div>
 
@@ -94,7 +94,7 @@ export const AdminDashboard: React.FC = () => {
             selectedTab === 'database' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          🗄️ Firestore Collections & Schema
+          🗄️ MongoDB Atlas Collections & Schema
         </button>
       </div>
 
@@ -175,61 +175,67 @@ export const AdminDashboard: React.FC = () => {
       {selectedTab === 'shifts' && (
         <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-4">
           <h3 className="text-lg font-black text-slate-900">All System Shifts</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 text-slate-400 uppercase font-bold text-[10px] border-b border-slate-200">
-                <tr>
-                  <th className="p-3">Shift ID</th>
-                  <th className="p-3">Business</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Worker Assigned</th>
-                  <th className="p-3">Gross Pay</th>
-                  <th className="p-3">10% Fee</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {shifts.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50/80">
-                    <td className="p-3 font-mono font-bold text-slate-900">{s.id}</td>
-                    <td className="p-3 font-semibold text-slate-800">{s.businessName}</td>
-                    <td className="p-3">{s.role}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 capitalize">
-                        {s.status}
-                      </span>
-                    </td>
-                    <td className="p-3 font-semibold text-emerald-700">{s.assignedWorkerName || 'Cascading...'}</td>
-                    <td className="p-3 font-bold">${s.payAmount}</td>
-                    <td className="p-3 font-bold text-purple-700">${s.platformFee}</td>
+          {shifts.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400">
+              No shifts created in MongoDB yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-400 uppercase font-bold text-[10px] border-b border-slate-200">
+                  <tr>
+                    <th className="p-3">Shift ID</th>
+                    <th className="p-3">Business</th>
+                    <th className="p-3">Role</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Worker Assigned</th>
+                    <th className="p-3">Gross Pay</th>
+                    <th className="p-3">10% Fee</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shifts.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/80">
+                      <td className="p-3 font-mono font-bold text-slate-900">{s.id}</td>
+                      <td className="p-3 font-semibold text-slate-800">{s.businessName}</td>
+                      <td className="p-3">{s.role}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 capitalize">
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="p-3 font-semibold text-emerald-700">{s.assignedWorkerName || 'Cascading...'}</td>
+                      <td className="p-3 font-bold">{formatINR(s.payAmount)}</td>
+                      <td className="p-3 font-bold text-purple-700">{formatINR(s.platformFee)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Tab 3: Firestore Collections & Schema Schema Reference */}
+      {/* Tab 3: MongoDB Atlas Collections & Schema Reference */}
       {selectedTab === 'database' && (
         <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
           <div>
-            <h3 className="text-lg font-black text-slate-900">Firestore Architecture & Database Collections</h3>
-            <p className="text-xs text-slate-500">Live schema mappings synchronized across React & Firebase SDK</p>
+            <h3 className="text-lg font-black text-slate-900">MongoDB Atlas Architecture & Database Collections</h3>
+            <p className="text-xs text-slate-500">Live Mongoose schema mappings synchronized across React frontend and Express REST API backend (`http://localhost:5000/api/v1`)</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
             {[
-              { col: 'users', count: '7 documents', desc: 'id, name, email, role (business/worker/admin), phone, avatar, createdAt' },
-              { col: 'businesses', count: '3 documents', desc: 'id, userId, companyName, category, address, location {lat, lon}, totalSpent, shiftsPosted' },
-              { col: 'workers', count: '5 documents', desc: 'id, userId, name, skills[], experienceYears, reliabilityScore, availabilityStatus, location, verificationStatus' },
+              { col: 'users', count: 'Live Collection', desc: 'id, name, email, role (business/worker/admin), phone, avatar, createdAt' },
+              { col: 'businesses', count: 'Live Collection', desc: 'id, userId, companyName, category, address, location {latitude, longitude}, totalSpent, shiftsPosted' },
+              { col: 'workers', count: `${workers.length} documents`, desc: 'id, userId, name, skills[], experienceYears, reliabilityScore, availabilityStatus, location, verificationStatus' },
               { col: 'shifts', count: `${shifts.length} documents`, desc: 'id, businessId, role, requiredSkills[], startTime, endTime, payAmount, platformFee (10%), status, assignedWorkerId, backupWorkerId, qrCodeSecret' },
-              { col: 'attendance', count: '2 documents', desc: 'id, shiftId, workerId, checkInTime, checkOutTime, status, verifiedBy (qr_scan), locationVerified' },
-              { col: 'ratings', count: '2 documents', desc: 'id, shiftId, fromUserId, toUserId, rating (1-5), review, tags[], createdAt' },
+              { col: 'attendance', count: 'Live Collection', desc: 'id, shiftId, workerId, checkInTime, checkOutTime, status, verifiedBy (qr_scan), locationVerified' },
+              { col: 'ratings', count: 'Live Collection', desc: 'id, shiftId, fromUserId, toUserId, rating (1-5), review, tags[], createdAt' },
             ].map((item) => (
               <div key={item.col} className="p-4 rounded-2xl bg-slate-900 text-slate-200 border border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between text-blue-400 font-bold">
-                  <span>collection('{item.col}')</span>
+                  <span>db.collection('{item.col}')</span>
                   <span className="text-xs text-emerald-400">{item.count}</span>
                 </div>
                 <p className="text-[11px] text-slate-400">{item.desc}</p>

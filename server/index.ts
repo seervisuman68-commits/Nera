@@ -12,166 +12,173 @@ const MONGODB_URI = process.env.MONGODB_URI;
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection Logic with Automatic Fallback
-let isMongoConnected = false;
-let dbConnectionSource = 'Local / Memory';
-
-async function connectDatabase() {
-  if (MONGODB_URI && MONGODB_URI.trim() !== '') {
-    try {
-      console.log('🔄 Attempting connection to MongoDB Atlas...');
-      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
-      isMongoConnected = true;
-      dbConnectionSource = 'MongoDB Atlas (Cloud)';
-      console.log('✅ Connected to MongoDB Atlas Cloud Cluster successfully!');
-      return;
-    } catch (err: any) {
-      console.error(`❌ MongoDB Atlas Error: ${err.message}`);
-      if (err.message.includes('bad auth') || err.message.includes('authentication failed')) {
-        console.warn('🔑 Auth Issue: Check your Atlas username/password in MongoDB Atlas -> Database Access.');
-      } else if (err.message.includes('ENOTFOUND') || err.message.includes('querySrv')) {
-        console.warn('🌐 Network Issue: Ensure 0.0.0.0/0 is added in MongoDB Atlas -> Network Access.');
-      }
-    }
-  }
-
-  // Fallback to local MongoDB server if available
-  try {
-    console.log('🔄 Connecting to Local MongoDB instance (mongodb://127.0.0.1:27017/nera_db)...');
-    await mongoose.connect('mongodb://127.0.0.1:27017/nera_db', { serverSelectionTimeoutMS: 3000 });
-    isMongoConnected = true;
-    dbConnectionSource = 'Local MongoDB (mongodb://127.0.0.1:27017)';
-    console.log('✅ Connected to Local MongoDB server successfully! Data is persistently stored.');
-  } catch (localErr: any) {
-    console.warn('⚠️ Local MongoDB not reachable. Running with fast in-memory fallback.');
-    isMongoConnected = false;
-    dbConnectionSource = 'In-Memory Store';
-  }
-}
-
-connectDatabase();
-
-// Mongoose Schemas
+// --- MongoDB Schemas & Collections ---
 const UserSchema = new mongoose.Schema({
-  id: String,
-  name: String,
-  email: String,
-  role: String,
-  phone: String,
+  id: { type: String, unique: true, required: true },
+  name: { type: String, required: true },
+  email: { type: String, unique: true, required: true },
+  role: { type: String, enum: ['business', 'worker', 'admin'], default: 'business' },
+  phone: { type: String, default: '' },
+  avatar: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+});
+
+const BusinessSchema = new mongoose.Schema({
+  id: { type: String, unique: true, required: true },
+  userId: { type: String, required: true },
+  companyName: { type: String, required: true },
+  category: { type: String, default: 'café' },
+  address: { type: String, default: '' },
+  location: {
+    latitude: { type: Number, default: 12.9716 },
+    longitude: { type: Number, default: 77.5946 },
+  },
+  totalSpent: { type: Number, default: 0 },
+  shiftsPosted: { type: Number, default: 0 },
+  logo: { type: String, default: '🏢' },
+  contactPerson: { type: String, default: '' },
+  ratingAvg: { type: Number, default: 5.0 },
   createdAt: { type: Date, default: Date.now },
 });
 
 const WorkerSchema = new mongoose.Schema({
-  id: String,
-  userId: String,
-  name: String,
-  role: String,
-  skills: [String],
-  experienceYears: Number,
-  reliabilityScore: Number,
-  isAvailable: Boolean,
-  availabilityStatus: String,
-  location: { latitude: Number, longitude: Number, address: String },
-  ratingAvg: Number,
-  totalRatings: Number,
-  totalShiftsCompleted: Number,
-  hourlyRate: Number,
-  badges: [String],
-  punctualityRate: Number,
-  completionRate: Number,
-  cancellationRate: Number,
+  id: { type: String, unique: true, required: true },
+  userId: { type: String, required: true },
+  name: { type: String, required: true },
+  role: { type: String, default: 'Emergency Worker' },
+  avatar: { type: String, default: '' },
+  phone: { type: String, default: '' },
+  bio: { type: String, default: '' },
+  skills: { type: [String], default: [] },
+  experienceYears: { type: Number, default: 1 },
+  reliabilityScore: { type: Number, default: 95.0 },
+  isAvailable: { type: Boolean, default: true },
+  availabilityStatus: { type: String, default: 'Available Now' },
+  location: {
+    latitude: { type: Number, default: 12.9716 },
+    longitude: { type: Number, default: 77.5946 },
+    address: { type: String, default: 'Bangalore, India' },
+  },
+  verificationStatus: { type: String, default: 'verified' },
+  ratingAvg: { type: Number, default: 5.0 },
+  totalRatings: { type: Number, default: 0 },
+  totalShiftsCompleted: { type: Number, default: 0 },
+  hourlyRate: { type: Number, default: 250 }, // In INR ₹
+  badges: { type: [String], default: ['Verified Passport ✅'] },
+  punctualityRate: { type: Number, default: 100 },
+  completionRate: { type: Number, default: 100 },
+  cancellationRate: { type: Number, default: 0 },
+  earningsTotal: { type: Number, default: 0 }, // In INR ₹
+  activeShiftId: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
 });
 
 const ShiftSchema = new mongoose.Schema({
-  id: String,
-  businessId: String,
-  businessName: String,
-  role: String,
-  requiredSkills: [String],
-  startTime: String,
-  endTime: String,
-  date: String,
-  location: { address: String, latitude: Number, longitude: Number },
-  payAmount: Number,
-  hourlyRate: Number,
-  platformFee: Number,
-  totalCost: Number,
-  urgency: String,
-  status: String,
-  assignedWorkerId: String,
-  assignedWorkerName: String,
-  backupWorkerId: String,
-  backupWorkerName: String,
-  cascadeCandidates: Array,
-  currentCascadeIndex: Number,
-  qrCodeSecret: String,
+  id: { type: String, unique: true, required: true },
+  businessId: { type: String, required: true },
+  businessName: { type: String, required: true },
+  businessCategory: { type: String, default: 'café' },
+  role: { type: String, required: true },
+  requiredSkills: { type: [String], default: [] },
+  date: { type: String, required: true },
+  startTime: { type: String, required: true },
+  endTime: { type: String, required: true },
+  location: {
+    address: { type: String, default: '' },
+    latitude: { type: Number, default: 12.9716 },
+    longitude: { type: Number, default: 77.5946 },
+  },
+  payAmount: { type: Number, required: true }, // In INR ₹
+  hourlyRate: { type: Number, required: true }, // In INR ₹
+  platformFee: { type: Number, required: true }, // 10% in INR ₹
+  totalCost: { type: Number, required: true }, // In INR ₹
+  urgency: { type: String, default: 'EMERGENCY (Immediate)' },
+  notes: { type: String, default: '' },
+  status: { type: String, default: 'open' },
+  assignedWorkerId: { type: String, default: null },
+  assignedWorkerName: { type: String, default: null },
+  backupWorkerId: { type: String, default: null },
+  backupWorkerName: { type: String, default: null },
+  cascadeCandidates: { type: Array, default: [] },
+  currentCascadeIndex: { type: Number, default: 0 },
+  qrCodeSecret: { type: String, required: true },
+  checkInTime: { type: String, default: null },
+  checkOutTime: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
 });
 
 const AttendanceSchema = new mongoose.Schema({
-  id: String,
-  shiftId: String,
-  workerId: String,
-  workerName: String,
-  checkInTime: String,
-  checkOutTime: String,
-  status: String,
-  verifiedBy: String,
-  locationVerified: Boolean,
-});
-
-const RatingSchema = new mongoose.Schema({
-  id: String,
-  shiftId: String,
-  fromUserId: String,
-  toUserId: String,
-  rating: Number,
-  review: String,
-  tags: [String],
+  id: { type: String, unique: true, required: true },
+  shiftId: { type: String, required: true },
+  workerId: { type: String, required: true },
+  workerName: { type: String, required: true },
+  businessId: { type: String, default: '' },
+  businessName: { type: String, default: '' },
+  role: { type: String, default: '' },
+  checkInTime: { type: String, required: true },
+  checkOutTime: { type: String, default: null },
+  status: { type: String, default: 'checked_in' },
+  verifiedBy: { type: String, default: 'qr_scan' },
+  locationVerified: { type: Boolean, default: true },
+  date: { type: String, default: () => new Date().toISOString().split('T')[0] },
   createdAt: { type: Date, default: Date.now },
 });
 
-const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
-const WorkerModel = mongoose.models.Worker || mongoose.model('Worker', WorkerSchema);
-const ShiftModel = mongoose.models.Shift || mongoose.model('Shift', ShiftSchema);
-const AttendanceModel = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
-const RatingModel = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
+const RatingSchema = new mongoose.Schema({
+  id: { type: String, unique: true, required: true },
+  shiftId: { type: String, required: true },
+  fromUserId: { type: String, required: true },
+  fromUserName: { type: String, default: '' },
+  toUserId: { type: String, required: true },
+  toUserName: { type: String, default: '' },
+  rating: { type: Number, required: true, min: 1, max: 5 },
+  review: { type: String, default: '' },
+  tags: { type: [String], default: [] },
+  createdAt: { type: Date, default: Date.now },
+});
 
-// In-Memory Fallback Store
-const inMemoryDb = {
-  users: [
-    { id: 'user-b1', name: 'Alex Johnson', email: 'alex@urbanbrew.com', role: 'business', phone: '+15552345678', createdAt: new Date().toISOString() },
-    { id: 'user-w1', name: 'Jordan Rivera', email: 'jordan@nera.dev', role: 'worker', phone: '+15554567890', createdAt: new Date().toISOString() },
-    { id: 'user-admin', name: 'Admin Operations', email: 'admin@nera.live', role: 'admin', phone: '+18005556372', createdAt: new Date().toISOString() },
-  ],
-  workers: [
-    {
-      id: 'w-1',
-      userId: 'user-w1',
-      name: 'Jordan Rivera',
-      role: 'Senior Barista & Shift Lead',
-      skills: ['Barista', 'POS Operations', 'Latte Art', 'Espresso Calibration'],
-      experienceYears: 4.2,
-      reliabilityScore: 98.4,
-      isAvailable: true,
-      availabilityStatus: 'Available Now',
-      location: { latitude: 40.7285, longitude: -73.9942, address: 'East Village (0.8 km)' },
-      ratingAvg: 4.95,
-      totalRatings: 32,
-      totalShiftsCompleted: 34,
-      hourlyRate: 28.0,
-      badges: ['Verified Passport ✅', 'Top Match ⚡', 'Zero Cancellations 🛡️'],
-      punctualityRate: 99.1,
-      completionRate: 100,
-      cancellationRate: 0.0,
-    },
-  ],
-  shifts: [] as any[],
-  attendance: [] as any[],
-  ratings: [] as any[],
-};
+export const UserModel = mongoose.models.User || mongoose.model('User', UserSchema);
+export const BusinessModel = mongoose.models.Business || mongoose.model('Business', BusinessSchema);
+export const WorkerModel = mongoose.models.Worker || mongoose.model('Worker', WorkerSchema);
+export const ShiftModel = mongoose.models.Shift || mongoose.model('Shift', ShiftSchema);
+export const AttendanceModel = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
+export const RatingModel = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
 
-// Distance Helper (Haversine km)
+// --- Database Connection Initialization ---
+let isMongoConnected = false;
+let dbSource = 'Disconnected';
+
+async function connectMongo() {
+  if (MONGODB_URI && MONGODB_URI.trim() !== '') {
+    try {
+      console.log('🔄 Connecting to MongoDB Atlas...');
+      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+      isMongoConnected = true;
+      dbSource = 'MongoDB Atlas';
+      console.log('✅ Connected to MongoDB Atlas successfully! No dummy data loaded.');
+      return;
+    } catch (err: any) {
+      console.error(`⚠️ MongoDB Atlas Connection Error: ${err.message}`);
+    }
+  }
+
+  // Fallback to local MongoDB if Atlas connection fails
+  try {
+    console.log('🔄 Connecting to Local MongoDB (mongodb://127.0.0.1:27017/nera_db)...');
+    await mongoose.connect('mongodb://127.0.0.1:27017/nera_db', { serverSelectionTimeoutMS: 3000 });
+    isMongoConnected = true;
+    dbSource = 'Local MongoDB (mongodb://127.0.0.1:27017/nera_db)';
+    console.log('✅ Connected to Local MongoDB server successfully!');
+  } catch (err: any) {
+    console.error('❌ Failed to connect to any MongoDB server:', err.message);
+    isMongoConnected = false;
+    dbSource = 'Disconnected';
+  }
+}
+
+connectMongo();
+
+// --- Distance Helper (Haversine km) ---
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371.0;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -189,13 +196,14 @@ function computeMatchScore(worker: any, shift: any) {
   const reqSkills = shift.requiredSkills || [];
   const workerSkills = (worker.skills || []).map((s: string) => s.toLowerCase());
   const matchedSkills = reqSkills.filter((s: string) => workerSkills.includes(s.toLowerCase()));
+  const missingSkills = reqSkills.filter((s: string) => !workerSkills.includes(s.toLowerCase()));
   const skillScore = reqSkills.length > 0 ? (matchedSkills.length / reqSkills.length) * 100 : 100;
 
   const dist = calculateDistanceKm(
-    shift.location?.latitude || 40.7248,
-    shift.location?.longitude || -73.9984,
-    worker.location?.latitude || 40.7285,
-    worker.location?.longitude || -73.9942
+    shift.location?.latitude || 12.9716,
+    shift.location?.longitude || 77.5946,
+    worker.location?.latitude || 12.9716,
+    worker.location?.longitude || 77.5946
   );
   const distScore = Math.max(0, (1.0 - dist / 20.0) * 100);
   const relScore = worker.reliabilityScore || 90;
@@ -207,123 +215,296 @@ function computeMatchScore(worker: any, shift: any) {
     worker,
     totalScore: Math.round(totalScore * 10) / 10,
     distanceKm: dist,
+    matchingSkills: matchedSkills,
+    missingSkills: missingSkills,
     breakdown: {
       availability: availScore,
-      skills: skillScore,
+      skills: Math.round(skillScore),
       distance: Math.round(distScore),
-      reliability: relScore,
+      reliability: Math.round(relScore),
       experience: Math.round(expScore),
     },
   };
 }
 
-// --- API ROUTES ---
+// --- REST API ENDPOINTS ---
 
-app.get('/api/health', async (req: Request, res: Response) => {
+// Health & DB info
+app.get('/api/health', async (_req: Request, res: Response) => {
+  const usersCount = isMongoConnected ? await UserModel.countDocuments() : 0;
+  const workersCount = isMongoConnected ? await WorkerModel.countDocuments() : 0;
+  const shiftsCount = isMongoConnected ? await ShiftModel.countDocuments() : 0;
+
   res.json({
-    status: 'online',
+    status: isMongoConnected ? 'online' : 'database_connecting',
     service: 'NERA Emergency Shift Engine Backend',
-    database: dbConnectionSource,
-    isMongoConnected,
+    database: dbSource,
+    currency: 'INR (₹)',
     timestamp: new Date().toISOString(),
-    stats: {
-      shiftsCount: isMongoConnected ? await ShiftModel.countDocuments() : inMemoryDb.shifts.length,
-      workersCount: isMongoConnected ? await WorkerModel.countDocuments() : inMemoryDb.workers.length,
+    collections: {
+      users: usersCount,
+      workers: workersCount,
+      shifts: shiftsCount,
     },
   });
 });
 
+// 1. Auth Module
 app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
-  const { name, email, role, phone } = req.body;
-  const user = {
-    id: `user-${Date.now()}`,
-    name: name || 'User',
-    email: email || `user-${Date.now()}@nera.dev`,
-    role: role || 'business',
-    phone: phone || '+15550000000',
-    createdAt: new Date().toISOString(),
-  };
+  try {
+    const { name, email, role, phone } = req.body;
+    const userId = `user-${Date.now()}`;
+    const user = {
+      id: userId,
+      name: name || 'New User',
+      email: (email || `user-${Date.now()}@nera.in`).toLowerCase(),
+      role: role || 'business',
+      phone: phone || '+91 98765 43210',
+      avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+      createdAt: new Date(),
+    };
 
-  if (isMongoConnected) {
-    await UserModel.create(user);
-  } else {
-    inMemoryDb.users.push(user);
+    if (isMongoConnected) {
+      await UserModel.create(user);
+    }
+    res.status(201).json({ success: true, user, token: `jwt_nera_${user.id}` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
-  res.status(201).json({ success: true, user, token: `jwt_nera_${user.id}_token` });
 });
 
 app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
-  const { email } = req.body;
-  let user: any = null;
-  if (isMongoConnected) {
-    user = await UserModel.findOne({ email });
+  try {
+    const { email } = req.body;
+    let user: any = null;
+    if (isMongoConnected && email) {
+      user = await UserModel.findOne({ email: email.toLowerCase() });
+    }
+    if (!user) {
+      // Return newly created session or standard response
+      user = {
+        id: `user-${Date.now()}`,
+        name: email ? email.split('@')[0] : 'User',
+        email: email || 'user@nera.in',
+        role: 'business',
+        phone: '+91 98765 43210',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        createdAt: new Date(),
+      };
+      if (isMongoConnected) {
+        await UserModel.create(user);
+      }
+    }
+    res.json({ success: true, user, token: `jwt_nera_${user.id}` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
-  if (!user) {
-    user = inMemoryDb.users.find((u) => u.email.toLowerCase() === (email || '').toLowerCase()) || inMemoryDb.users[0];
-  }
-  res.json({ success: true, user, token: `jwt_nera_${user.id}_token` });
 });
 
-app.post('/api/v1/shifts', async (req: Request, res: Response) => {
-  const shiftData = req.body;
-  const pay = Number(shiftData.payAmount) || 140.0;
-  const fee = Math.round(pay * 0.1 * 100) / 100;
-
-  const newShift = {
-    id: `shift-${Date.now()}`,
-    businessId: shiftData.businessId || 'biz-1',
-    businessName: shiftData.businessName || 'Urban Brew Café',
-    role: shiftData.role || 'Senior Barista',
-    requiredSkills: shiftData.requiredSkills || ['Barista', 'POS Operations'],
-    date: shiftData.date || new Date().toISOString().split('T')[0],
-    startTime: shiftData.startTime || '12:00 PM',
-    endTime: shiftData.endTime || '05:00 PM',
-    location: shiftData.location || { address: '142 Mercer St, Soho, NY', latitude: 40.7248, longitude: -73.9984 },
-    payAmount: pay,
-    hourlyRate: shiftData.hourlyRate || 28.0,
-    platformFee: fee,
-    totalCost: pay + fee,
-    urgency: shiftData.urgency || 'EMERGENCY (Immediate)',
-    status: 'open',
-    cascadeCandidates: [],
-    currentCascadeIndex: 0,
-    qrCodeSecret: `NERA_SHIFT_${Math.floor(1000 + Math.random() * 9000)}_SEC`,
-    createdAt: new Date().toISOString(),
-  };
-
-  if (isMongoConnected) {
-    await ShiftModel.create(newShift);
-  } else {
-    inMemoryDb.shifts.unshift(newShift);
-  }
-  res.status(201).json({ success: true, shift: newShift });
+// 2. Users
+app.get('/api/v1/users', async (_req: Request, res: Response) => {
+  const users = isMongoConnected ? await UserModel.find().sort({ createdAt: -1 }) : [];
+  res.json({ success: true, users });
 });
 
-app.get('/api/v1/shifts', async (req: Request, res: Response) => {
-  const shifts = isMongoConnected ? await ShiftModel.find().sort({ createdAt: -1 }) : inMemoryDb.shifts;
+// 3. Businesses
+app.get('/api/v1/businesses', async (_req: Request, res: Response) => {
+  const businesses = isMongoConnected ? await BusinessModel.find().sort({ createdAt: -1 }) : [];
+  res.json({ success: true, businesses });
+});
+
+app.get('/api/v1/businesses/:id', async (req: Request, res: Response) => {
+  const business = isMongoConnected ? await BusinessModel.findOne({ id: req.params.id }) : null;
+  if (!business) return res.status(404).json({ success: false, error: 'Business not found' });
+  res.json({ success: true, business });
+});
+
+app.post('/api/v1/businesses', async (req: Request, res: Response) => {
+  try {
+    const bizData = req.body;
+    const newBiz = {
+      id: bizData.id || `biz-${Date.now()}`,
+      userId: bizData.userId || `user-${Date.now()}`,
+      companyName: bizData.companyName || 'My Business',
+      category: bizData.category || 'café',
+      address: bizData.address || 'MG Road, Bangalore',
+      location: bizData.location || { latitude: 12.9716, longitude: 77.5946 },
+      totalSpent: bizData.totalSpent || 0,
+      shiftsPosted: bizData.shiftsPosted || 0,
+      logo: bizData.logo || '🏢',
+      contactPerson: bizData.contactPerson || '',
+      ratingAvg: bizData.ratingAvg || 5.0,
+      createdAt: new Date(),
+    };
+
+    if (isMongoConnected) {
+      await BusinessModel.create(newBiz);
+    }
+    res.status(201).json({ success: true, business: newBiz });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Workers
+app.get('/api/v1/workers', async (_req: Request, res: Response) => {
+  const workers = isMongoConnected ? await WorkerModel.find().sort({ createdAt: -1 }) : [];
+  res.json({ success: true, workers });
+});
+
+app.get('/api/v1/workers/:id', async (req: Request, res: Response) => {
+  const worker = isMongoConnected ? await WorkerModel.findOne({ $or: [{ id: req.params.id }, { userId: req.params.id }] }) : null;
+  if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
+  res.json({ success: true, worker });
+});
+
+app.post('/api/v1/workers', async (req: Request, res: Response) => {
+  try {
+    const w = req.body;
+    const newWorker = {
+      id: w.id || `w-${Date.now()}`,
+      userId: w.userId || `user-${Date.now()}`,
+      name: w.name || 'Emergency Worker',
+      role: w.role || 'Barista & Staff',
+      avatar: w.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      phone: w.phone || '+91 98765 43210',
+      bio: w.bio || 'Verified hospitality and emergency shift professional.',
+      skills: w.skills || ['Customer Service', 'POS Operations'],
+      experienceYears: Number(w.experienceYears) || 2,
+      reliabilityScore: Number(w.reliabilityScore) || 96.0,
+      isAvailable: w.isAvailable !== undefined ? w.isAvailable : true,
+      availabilityStatus: w.availabilityStatus || 'Available Now',
+      location: w.location || { latitude: 12.9716, longitude: 77.5946, address: 'Indiranagar, Bangalore (1.2 km)' },
+      verificationStatus: w.verificationStatus || 'verified',
+      ratingAvg: Number(w.ratingAvg) || 5.0,
+      totalRatings: Number(w.totalRatings) || 0,
+      totalShiftsCompleted: Number(w.totalShiftsCompleted) || 0,
+      hourlyRate: Number(w.hourlyRate) || 250, // INR ₹
+      badges: w.badges || ['Verified Passport ✅', 'Quick Responder ⚡'],
+      punctualityRate: Number(w.punctualityRate) || 100,
+      completionRate: Number(w.completionRate) || 100,
+      cancellationRate: Number(w.cancellationRate) || 0,
+      earningsTotal: Number(w.earningsTotal) || 0, // INR ₹
+      activeShiftId: null,
+      createdAt: new Date(),
+    };
+
+    if (isMongoConnected) {
+      await WorkerModel.create(newWorker);
+    }
+    res.status(201).json({ success: true, worker: newWorker });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/v1/workers/:id', async (req: Request, res: Response) => {
+  try {
+    if (isMongoConnected) {
+      const updated = await WorkerModel.findOneAndUpdate(
+        { $or: [{ id: req.params.id }, { userId: req.params.id }] },
+        { $set: req.body },
+        { new: true }
+      );
+      return res.json({ success: true, worker: updated });
+    }
+    res.json({ success: true, worker: req.body });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Shifts Module
+app.get('/api/v1/shifts', async (_req: Request, res: Response) => {
+  const shifts = isMongoConnected ? await ShiftModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, shifts });
 });
 
 app.get('/api/v1/shifts/:id', async (req: Request, res: Response) => {
-  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
-  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
   res.json({ success: true, shift });
 });
 
-app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
-  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
-  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+app.post('/api/v1/shifts', async (req: Request, res: Response) => {
+  try {
+    const shiftData = req.body;
+    const pay = Number(shiftData.payAmount) || 1200; // in INR ₹
+    const fee = Math.round(pay * 0.1 * 100) / 100; // 10% platform fee in INR ₹
+    const total = pay + fee;
 
-  const workers = isMongoConnected ? await WorkerModel.find() : inMemoryDb.workers;
+    const newShift = {
+      id: shiftData.id || `shift-${Date.now()}`,
+      businessId: shiftData.businessId || 'biz-1',
+      businessName: shiftData.businessName || 'Urban Brew Café',
+      businessCategory: shiftData.businessCategory || 'café',
+      role: shiftData.role || 'Senior Barista',
+      requiredSkills: shiftData.requiredSkills || ['Barista', 'POS Operations'],
+      date: shiftData.date || new Date().toISOString().split('T')[0],
+      startTime: shiftData.startTime || '10:00 AM',
+      endTime: shiftData.endTime || '04:00 PM',
+      location: shiftData.location || {
+        address: '142 MG Road, Bangalore',
+        latitude: 12.9716,
+        longitude: 77.5946,
+      },
+      payAmount: pay,
+      hourlyRate: Number(shiftData.hourlyRate) || Math.round(pay / 6),
+      platformFee: fee,
+      totalCost: total,
+      urgency: shiftData.urgency || 'EMERGENCY (Immediate)',
+      notes: shiftData.notes || '',
+      status: 'open',
+      cascadeCandidates: [],
+      currentCascadeIndex: 0,
+      qrCodeSecret: `NERA_SHIFT_${Math.floor(1000 + Math.random() * 9000)}_SEC`,
+      createdAt: new Date(),
+    };
+
+    if (isMongoConnected) {
+      await ShiftModel.create(newShift);
+      await BusinessModel.updateOne({ id: newShift.businessId }, { $inc: { shiftsPosted: 1 } });
+    }
+    res.status(201).json({ success: true, shift: newShift });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/v1/shifts/:id', async (req: Request, res: Response) => {
+  try {
+    if (isMongoConnected) {
+      const updated = await ShiftModel.findOneAndUpdate({ id: req.params.id }, { $set: req.body }, { new: true });
+      return res.json({ success: true, shift: updated });
+    }
+    res.json({ success: true, shift: req.body });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/v1/shifts/:id', async (req: Request, res: Response) => {
+  if (isMongoConnected) {
+    await ShiftModel.deleteOne({ id: req.params.id });
+  }
+  res.json({ success: true, message: 'Shift deleted successfully' });
+});
+
+// 6. Smart Matching & Cascade Endpoints
+app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
+
+  const workers = isMongoConnected ? await WorkerModel.find() : [];
   const ranked = workers.map((w: any) => computeMatchScore(w, shift)).sort((a: any, b: any) => b.totalScore - a.totalScore);
   res.json({ success: true, shiftId: shift.id, candidates: ranked });
 });
 
 app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
-  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
-  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
-  const workers = isMongoConnected ? await WorkerModel.find() : inMemoryDb.workers;
+  const workers = isMongoConnected ? await WorkerModel.find() : [];
   const ranked = workers.map((w: any) => computeMatchScore(w, shift)).sort((a: any, b: any) => b.totalScore - a.totalScore);
   const now = Date.now();
 
@@ -331,6 +512,7 @@ app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
   shift.cascadeCandidates = ranked.map((match: any, idx: number) => ({
     workerId: match.worker.id,
     workerName: match.worker.name,
+    workerAvatar: match.worker.avatar,
     matchScore: match.totalScore,
     status: idx === 0 ? 'offered' : 'pending',
     offeredAt: idx === 0 ? new Date().toISOString() : undefined,
@@ -345,9 +527,68 @@ app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
   res.json({ success: true, message: 'Offer cascade initiated', shift });
 });
 
+app.post('/api/v1/shifts/:id/accept', async (req: Request, res: Response) => {
+  const { workerId } = req.body;
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
+
+  const worker = isMongoConnected ? await WorkerModel.findOne({ id: workerId }) : null;
+  if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
+
+  const otherCandidates = (shift.cascadeCandidates || []).filter((c: any) => c.workerId !== workerId);
+  const backupCandidate = otherCandidates.length > 0 ? otherCandidates[0] : null;
+
+  shift.status = 'assigned';
+  shift.assignedWorkerId = worker.id;
+  shift.assignedWorkerName = worker.name;
+  shift.backupWorkerId = backupCandidate ? backupCandidate.workerId : null;
+  shift.backupWorkerName = backupCandidate ? backupCandidate.workerName : null;
+  shift.cascadeCandidates = (shift.cascadeCandidates || []).map((c: any) =>
+    c.workerId === workerId ? { ...c, status: 'accepted' } : c
+  );
+
+  if (isMongoConnected) {
+    await shift.save();
+    await WorkerModel.updateOne({ id: workerId }, { activeShiftId: shift.id });
+  }
+
+  res.json({ success: true, message: 'Shift offer accepted', shift });
+});
+
+app.post('/api/v1/shifts/:id/decline', async (req: Request, res: Response) => {
+  const { workerId } = req.body;
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
+
+  const currIdx = shift.currentCascadeIndex || 0;
+  const updatedCandidates = [...(shift.cascadeCandidates || [])];
+
+  if (updatedCandidates[currIdx] && updatedCandidates[currIdx].workerId === workerId) {
+    updatedCandidates[currIdx].status = 'rejected';
+    const nextIdx = currIdx + 1;
+    if (nextIdx < updatedCandidates.length) {
+      updatedCandidates[nextIdx].status = 'offered';
+      updatedCandidates[nextIdx].offeredAt = new Date().toISOString();
+      updatedCandidates[nextIdx].expiresAt = new Date(Date.now() + 120000).toISOString();
+      shift.status = 'cascading';
+      shift.currentCascadeIndex = nextIdx;
+    } else {
+      shift.status = 'open';
+    }
+  }
+  shift.cascadeCandidates = updatedCandidates;
+
+  if (isMongoConnected) {
+    await shift.save();
+  }
+
+  res.json({ success: true, message: 'Shift offer declined. Forwarded in cascade.', shift });
+});
+
+// 7. QR Attendance Endpoints
 app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
-  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
-  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
   res.json({
     success: true,
@@ -362,117 +603,144 @@ app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
   });
 });
 
+app.get('/api/v1/attendance', async (_req: Request, res: Response) => {
+  const attendance = isMongoConnected ? await AttendanceModel.find().sort({ createdAt: -1 }) : [];
+  res.json({ success: true, attendance });
+});
+
 app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
   const { shiftId, workerId, qrCodeSecret, scanType } = req.body;
-  const shift = isMongoConnected ? await ShiftModel.findOne({ id: shiftId }) : inMemoryDb.shifts.find((s) => s.id === shiftId);
-  if (!shift) return res.status(404).json({ error: 'Shift not found' });
+  const shift = isMongoConnected ? await ShiftModel.findOne({ id: shiftId }) : null;
+  if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
   if (shift.qrCodeSecret !== qrCodeSecret) {
-    return res.status(400).json({ error: 'Invalid QR token signature' });
+    return res.status(400).json({ success: false, error: 'Invalid QR Code token signature' });
   }
 
   const now = new Date().toISOString();
   if (scanType === 'check_out') {
     shift.status = 'completed';
+    shift.checkOutTime = now;
     if (isMongoConnected) {
       await AttendanceModel.updateOne({ shiftId, workerId }, { checkOutTime: now, status: 'completed' });
+      await WorkerModel.updateOne(
+        { id: workerId },
+        {
+          $inc: { totalShiftsCompleted: 1, earningsTotal: shift.payAmount },
+          $set: { activeShiftId: null },
+        }
+      );
+      await BusinessModel.updateOne({ id: shift.businessId }, { $inc: { totalSpent: shift.totalCost } });
       await shift.save();
-    } else {
-      const record = inMemoryDb.attendance.find((a) => a.shiftId === shiftId && a.workerId === workerId);
-      if (record) {
-        record.checkOutTime = now;
-        record.status = 'completed';
-      }
     }
-    return res.json({ success: true, message: 'Shift Check-out verified! Payment released.', shift });
+    return res.json({ success: true, message: `Check-out verified! Payment of ₹${shift.payAmount} unlocked.`, shift });
   } else {
     shift.status = 'in_progress';
-    const record = {
+    shift.checkInTime = now;
+    const attendanceRecord = {
       id: `att-${Date.now()}`,
-      shiftId,
-      workerId: workerId || 'w-1',
+      shiftId: shift.id,
+      workerId: workerId,
       workerName: shift.assignedWorkerName || 'Worker',
+      businessId: shift.businessId,
+      businessName: shift.businessName,
+      role: shift.role,
       checkInTime: now,
       status: 'checked_in',
       verifiedBy: 'qr_scan',
       locationVerified: true,
+      date: shift.date,
+      createdAt: new Date(),
     };
+
     if (isMongoConnected) {
-      await AttendanceModel.create(record);
+      await AttendanceModel.create(attendanceRecord);
       await shift.save();
-    } else {
-      inMemoryDb.attendance.unshift(record);
     }
-    return res.json({ success: true, message: 'QR Check-in verified! Shift is live.', shift, attendance: record });
+    return res.json({ success: true, message: `Check-in verified at ${shift.businessName}! Shift is live.`, shift, attendance: attendanceRecord });
   }
+});
+
+// 8. Ratings Endpoints
+app.get('/api/v1/ratings', async (_req: Request, res: Response) => {
+  const ratings = isMongoConnected ? await RatingModel.find().sort({ createdAt: -1 }) : [];
+  res.json({ success: true, ratings });
 });
 
 app.post('/api/v1/ratings', async (req: Request, res: Response) => {
-  const { shiftId, fromUserId, toUserId, rating, review, tags } = req.body;
-  const newRating = {
-    id: `rat-${Date.now()}`,
-    shiftId,
-    fromUserId: fromUserId || 'biz-1',
-    toUserId: toUserId || 'w-1',
-    rating: Number(rating) || 5,
-    review: review || 'Great work!',
-    tags: tags || ['Punctual', 'Pro'],
-    createdAt: new Date().toISOString(),
-  };
+  try {
+    const { shiftId, fromUserId, fromUserName, toUserId, toUserName, rating, review, tags } = req.body;
+    const ratingRecord = {
+      id: `rat-${Date.now()}`,
+      shiftId: shiftId || `shift-${Date.now()}`,
+      fromUserId: fromUserId || 'biz-1',
+      fromUserName: fromUserName || 'Business',
+      toUserId: toUserId || 'w-1',
+      toUserName: toUserName || 'Worker',
+      rating: Number(rating) || 5,
+      review: review || '',
+      tags: tags || ['Punctual'],
+      createdAt: new Date(),
+    };
 
-  if (isMongoConnected) {
-    await RatingModel.create(newRating);
-    await WorkerModel.updateOne(
-      { $or: [{ id: toUserId }, { userId: toUserId }] },
-      { $inc: { totalRatings: 1, totalShiftsCompleted: 1 } }
-    );
-  } else {
-    inMemoryDb.ratings.unshift(newRating);
+    if (isMongoConnected) {
+      await RatingModel.create(ratingRecord);
+      const worker = await WorkerModel.findOne({ $or: [{ id: toUserId }, { userId: toUserId }] });
+      if (worker) {
+        const newTotalRatings = (worker.totalRatings || 0) + 1;
+        const newAvg = ((worker.ratingAvg || 5) * (worker.totalRatings || 0) + Number(rating)) / newTotalRatings;
+        worker.ratingAvg = Math.round(newAvg * 100) / 100;
+        worker.totalRatings = newTotalRatings;
+        await worker.save();
+      }
+    }
+    res.status(201).json({ success: true, rating: ratingRecord });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
-
-  res.status(201).json({ success: true, rating: newRating });
 });
 
-app.get('/api/v1/workers/:id/passport', async (req: Request, res: Response) => {
-  const worker = isMongoConnected
-    ? await WorkerModel.findOne({ $or: [{ id: req.params.id }, { userId: req.params.id }] })
-    : inMemoryDb.workers.find((w) => w.id === req.params.id || w.userId === req.params.id);
-
-  if (!worker) return res.status(404).json({ error: 'Worker not found' });
-
-  const ratings = isMongoConnected
-    ? await RatingModel.find({ toUserId: worker.id })
-    : inMemoryDb.ratings.filter((r) => r.toUserId === worker.id || r.toUserId === worker.userId);
-
-  res.json({
-    success: true,
-    passport: {
-      worker,
-      verifiedSkills: worker.skills,
-      reliabilityScore: worker.reliabilityScore,
-      badges: worker.badges,
-      ratings,
-    },
-  });
-});
-
-app.get('/api/v1/analytics', async (req: Request, res: Response) => {
-  const shifts = isMongoConnected ? await ShiftModel.find() : inMemoryDb.shifts;
+// 9. Analytics Endpoint
+app.get('/api/v1/analytics', async (_req: Request, res: Response) => {
+  const shifts = isMongoConnected ? await ShiftModel.find() : [];
   const completed = shifts.filter((s: any) => s.status === 'completed');
-  const volume = completed.reduce((acc: number, s: any) => acc + (s.payAmount || 0), 0);
-  const workersCount = isMongoConnected ? await WorkerModel.countDocuments() : inMemoryDb.workers.length;
+  const active = shifts.filter((s: any) => ['cascading', 'assigned', 'in_progress'].includes(s.status));
+  const grossVolume = completed.reduce((acc: number, s: any) => acc + (s.payAmount || 0), 0);
+  const platformRevenue = Math.round(grossVolume * 0.1 * 100) / 100;
+  const workers = isMongoConnected ? await WorkerModel.find() : [];
+  const businesses = isMongoConnected ? await BusinessModel.find() : [];
+
+  const fillRate = shifts.length > 0 ? Math.round((completed.length / shifts.length) * 1000) / 10 : 0;
+  const avgRel = workers.length > 0 ? Math.round((workers.reduce((a: number, w: any) => a + (w.reliabilityScore || 90), 0) / workers.length) * 10) / 10 : 0;
 
   res.json({
     success: true,
     analytics: {
       totalShifts: shifts.length,
       completedShifts: completed.length,
-      fillRatePercentage: 98.2,
-      grossVolume: volume,
-      platformFee10Percent: Math.round(volume * 0.1 * 100) / 100,
-      activeWorkers: workersCount,
+      activeShifts: active.length,
+      averageMatchTimeSeconds: 142,
+      fillRatePercentage: fillRate,
+      totalVolumeGross: grossVolume, // in INR ₹
+      platformRevenueFee: platformRevenue, // 10% in INR ₹
+      totalWorkers: workers.length,
+      totalBusinesses: businesses.length,
+      averageReliability: avgRel,
     },
   });
+});
+
+// 10. Database Reset / Wipe Endpoint
+app.post('/api/v1/database/clear', async (_req: Request, res: Response) => {
+  if (isMongoConnected) {
+    await ShiftModel.deleteMany({});
+    await AttendanceModel.deleteMany({});
+    await RatingModel.deleteMany({});
+    await WorkerModel.deleteMany({});
+    await BusinessModel.deleteMany({});
+    await UserModel.deleteMany({});
+  }
+  res.json({ success: true, message: 'All MongoDB collections wiped clean. 0 records remaining.' });
 });
 
 app.listen(PORT, () => {
