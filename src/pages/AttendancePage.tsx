@@ -13,17 +13,31 @@ import {
   ShieldCheck,
   Camera,
   Search,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 export const AttendancePage: React.FC = () => {
-  const { attendanceLogs, shifts, workers } = useShifts();
+  const { attendanceLogs, shifts, workers, refreshData } = useShifts();
   const { currentUser, currentWorker } = useAuth();
 
   const [activeShiftScanner, setActiveShiftScanner] = useState<any | null>(null);
   const [activeShiftQR, setActiveShiftQR] = useState<any | null>(null);
+  const [filter, setFilter] = useState<'all' | 'checked_in' | 'completed'>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshData();
+    setIsRefreshing(false);
+  };
 
   const activeShift = shifts.find((s) => ['assigned', 'in_progress'].includes(s.status));
+
+  const filteredLogs = attendanceLogs.filter((log) => {
+    if (filter === 'all') return true;
+    return log.status === filter;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -37,11 +51,20 @@ export const AttendancePage: React.FC = () => {
             QR Check-In & Attendance Records
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
-            Zero-friction geofenced QR scanning with anti-spoof check-in & check-out validation.
+            Zero-friction geofenced QR scanning with anti-spoof check-in & check-out validation in MongoDB.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Sync Live Records</span>
+          </button>
+
           {activeShift && currentUser?.role === 'worker' && currentWorker && (
             <button
               onClick={() => setActiveShiftScanner({ shift: activeShift, mode: activeShift.status === 'assigned' ? 'check_in' : 'check_out' })}
@@ -81,7 +104,7 @@ export const AttendancePage: React.FC = () => {
           <div>
             <h4 className="font-bold text-sm text-slate-900">Worker Arrival Scan</h4>
             <p className="text-xs text-slate-500 mt-1">
-              Worker scans QR code upon arrival. GPS coordinates & timestamp recorded instantly.
+              Worker scans QR code upon arrival. GPS coordinates & timestamp recorded instantly in MongoDB.
             </p>
           </div>
         </div>
@@ -99,62 +122,97 @@ export const AttendancePage: React.FC = () => {
 
       {/* Verified Attendance Logs Table */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-black text-slate-900">Live Attendance History</h3>
-            <p className="text-xs text-slate-500">Verified arrival timestamps and departure logs</p>
+            <p className="text-xs text-slate-500">Verified arrival timestamps and departure logs from MongoDB Atlas</p>
           </div>
-          <span className="text-xs font-bold text-slate-400">{attendanceLogs.length} Records</span>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-400">Filter:</span>
+            <div className="flex bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-2.5 py-1 rounded-lg ${filter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500'}`}
+              >
+                All ({attendanceLogs.length})
+              </button>
+              <button
+                onClick={() => setFilter('checked_in')}
+                className={`px-2.5 py-1 rounded-lg ${filter === 'checked_in' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-500'}`}
+              >
+                Live ({attendanceLogs.filter(a => a.status === 'checked_in').length})
+              </button>
+              <button
+                onClick={() => setFilter('completed')}
+                className={`px-2.5 py-1 rounded-lg ${filter === 'completed' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-500'}`}
+              >
+                Completed ({attendanceLogs.filter(a => a.status === 'completed').length})
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-400 uppercase font-bold text-[10px] border-b border-slate-200">
-              <tr>
-                <th className="p-3">Log ID</th>
-                <th className="p-3">Worker Name</th>
-                <th className="p-3">Business Venue</th>
-                <th className="p-3">Role</th>
-                <th className="p-3">Check-In Time</th>
-                <th className="p-3">Check-Out Time</th>
-                <th className="p-3">Verification Method</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {attendanceLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/80">
-                  <td className="p-3 font-mono font-bold text-slate-900">{log.id}</td>
-                  <td className="p-3 font-bold text-slate-800 flex items-center gap-1.5">
-                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{log.workerName}</span>
-                  </td>
-                  <td className="p-3 font-medium text-slate-700">{log.businessName}</td>
-                  <td className="p-3">{log.role}</td>
-                  <td className="p-3 font-mono text-emerald-700">
-                    {new Date(log.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="p-3 font-mono text-slate-600">
-                    {log.checkOutTime
-                      ? new Date(log.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : 'Shift in Progress...'}
-                  </td>
-                  <td className="p-3">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                      <QrCode className="w-3 h-3" />
-                      QR Signature GPS
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 capitalize">
-                      {log.status.replace('_', ' ')}
-                    </span>
-                  </td>
+        {filteredLogs.length === 0 ? (
+          <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl space-y-2">
+            <QrCode className="w-8 h-8 text-slate-300 mx-auto" />
+            <h4 className="font-bold text-sm text-slate-700">No Attendance Records</h4>
+            <p className="text-xs text-slate-400">When workers scan the QR check-in code at venues, records appear here immediately.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-50 text-slate-400 uppercase font-bold text-[10px] border-b border-slate-200">
+                <tr>
+                  <th className="p-3">Log ID</th>
+                  <th className="p-3">Worker Name</th>
+                  <th className="p-3">Business Venue</th>
+                  <th className="p-3">Role</th>
+                  <th className="p-3">Check-In Time</th>
+                  <th className="p-3">Check-Out Time</th>
+                  <th className="p-3">Verification Method</th>
+                  <th className="p-3">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50/80">
+                    <td className="p-3 font-mono font-bold text-slate-900">{log.id}</td>
+                    <td className="p-3 font-bold text-slate-800 flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{log.workerName}</span>
+                    </td>
+                    <td className="p-3 font-medium text-slate-700">{log.businessName}</td>
+                    <td className="p-3">{log.role}</td>
+                    <td className="p-3 font-mono text-emerald-700 font-bold">
+                      {new Date(log.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="p-3 font-mono text-slate-600">
+                      {log.checkOutTime
+                        ? new Date(log.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : <span className="text-amber-600 font-bold">Shift in Progress ⏱️</span>}
+                    </td>
+                    <td className="p-3">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <QrCode className="w-3 h-3" />
+                        QR + GPS
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        log.status === 'completed'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-emerald-100 text-emerald-800 animate-pulse'
+                      }`}>
+                        {log.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* QR Scanner Modal */}
@@ -165,6 +223,7 @@ export const AttendancePage: React.FC = () => {
           mode={activeShiftScanner.mode}
           isOpen={!!activeShiftScanner}
           onClose={() => setActiveShiftScanner(null)}
+          onSuccess={() => refreshData()}
         />
       )}
 

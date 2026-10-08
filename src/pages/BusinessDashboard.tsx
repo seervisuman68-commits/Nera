@@ -6,6 +6,7 @@ import { Shift, Worker } from '../types';
 import { CascadeStatusWidget } from '../components/cascade/CascadeStatusWidget';
 import { QRGeneratorModal } from '../components/qr/QRGeneratorModal';
 import { RatingModal } from '../components/rating/RatingModal';
+import { AddWorkerModal } from '../components/workers/AddWorkerModal';
 import { formatINR, formatHourlyINR } from '../utils/currency';
 import {
   PlusCircle,
@@ -20,24 +21,29 @@ import {
   ShieldCheck,
   Building,
   TrendingUp,
-  MapPin
+  MapPin,
+  Sparkles,
+  UserPlus
 } from 'lucide-react';
 
 export const BusinessDashboard: React.FC = () => {
   const { currentBusiness } = useAuth();
-  const { shifts, attendanceLogs, ratings, workers } = useShifts();
+  const { shifts, attendanceLogs, ratings, workers, refreshData } = useShifts();
   const navigate = useNavigate();
 
   const [selectedShiftForQR, setSelectedShiftForQR] = useState<Shift | null>(null);
   const [selectedShiftForRating, setSelectedShiftForRating] = useState<Shift | null>(null);
+  const [isAddWorkerOpen, setIsAddWorkerOpen] = useState<boolean>(false);
 
-  const businessShifts = shifts.filter(
-    (s) => !currentBusiness || s.businessId === currentBusiness.id || s.businessName.includes('Urban')
-  );
+  // Filter shifts: if business has posted shifts, show them; otherwise show active platform shifts
+  const myShifts = currentBusiness
+    ? shifts.filter((s) => s.businessId === currentBusiness.id || s.businessName === currentBusiness.companyName)
+    : shifts;
+  const businessShifts = myShifts.length > 0 ? myShifts : shifts;
 
   const activeShifts = businessShifts.filter((s) => ['open', 'cascading', 'assigned', 'in_progress'].includes(s.status));
   const completedShifts = businessShifts.filter((s) => s.status === 'completed');
-
+  const availableWorkers = workers.filter((w) => w.availabilityStatus === 'Available Now');
   const totalSpent = completedShifts.reduce((acc, s) => acc + s.totalCost, 0);
 
   return (
@@ -63,12 +69,13 @@ export const BusinessDashboard: React.FC = () => {
             <PlusCircle className="w-5 h-5" />
             Post Emergency Shift
           </Link>
-          <Link
-            to="/analytics"
-            className="px-4 py-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-sm font-semibold border border-slate-700 transition-colors"
+          <button
+            onClick={() => setIsAddWorkerOpen(true)}
+            className="px-4 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all"
           >
-            View Spending
-          </Link>
+            <UserPlus className="w-4 h-4" />
+            <span>Add Worker to Pool</span>
+          </button>
         </div>
       </div>
 
@@ -118,10 +125,93 @@ export const BusinessDashboard: React.FC = () => {
             </span>
           </div>
           <div className="text-2xl font-black text-slate-900 mt-2">
-            {workers.filter((w) => w.availabilityStatus === 'Available Now').length} Verified
+            {availableWorkers.length} Verified
           </div>
-          <div className="text-[11px] text-emerald-600 font-semibold mt-1">Avg 0.9 km distance</div>
+          <div className="text-[11px] text-emerald-600 font-semibold mt-1">Total {workers.length} in DB Pool</div>
         </div>
+      </div>
+
+      {/* Verified Worker Pool from Persistent MongoDB */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-emerald-600" />
+              <h2 className="text-lg font-black text-slate-900">Verified Nearby Worker Pool</h2>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                {workers.length} Total Workers in MongoDB
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Real-time candidate pool available for immediate 5-factor smart matching & dispatch
+            </p>
+          </div>
+          <button
+            onClick={() => setIsAddWorkerOpen(true)}
+            className="px-4 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-200 flex items-center gap-1.5 transition-colors self-start sm:self-auto"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Register New Worker</span>
+          </button>
+        </div>
+
+        {workers.length === 0 ? (
+          <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl space-y-2">
+            <Users className="w-8 h-8 text-slate-300 mx-auto" />
+            <h4 className="font-bold text-sm text-slate-700">No Workers Registered Yet</h4>
+            <p className="text-xs text-slate-400">Click below to register the first worker to the MongoDB database pool.</p>
+            <button
+              onClick={() => setIsAddWorkerOpen(true)}
+              className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold"
+            >
+              + Register Worker
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {workers.map((w) => (
+              <div
+                key={w.id}
+                className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-emerald-300 transition-all space-y-3"
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={w.avatar}
+                    alt={w.name}
+                    className="w-12 h-12 rounded-xl object-cover border border-slate-200"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <h4 className="font-bold text-sm text-slate-900 truncate">{w.name}</h4>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        w.availabilityStatus === 'Available Now'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {w.availabilityStatus === 'Available Now' ? '🟢 Ready' : '🟡 Later'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 truncate">{w.role}</p>
+                    <p className="text-[11px] font-bold text-emerald-600 mt-0.5">
+                      {formatHourlyINR(w.hourlyRate)} • {w.reliabilityScore}% Rel.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {w.skills.slice(0, 3).map((s) => (
+                    <span key={s} className="text-[10px] bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded-md">
+                      {s}
+                    </span>
+                  ))}
+                  {w.skills.length > 3 && (
+                    <span className="text-[10px] text-slate-400 font-bold px-1 py-0.5">+{w.skills.length - 3}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Active Shifts with Live Cascade Engine */}
@@ -166,10 +256,19 @@ export const BusinessDashboard: React.FC = () => {
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
                         {shift.urgency}
                       </span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                        shift.status === 'in_progress'
+                          ? 'bg-emerald-100 text-emerald-800 animate-pulse'
+                          : shift.status === 'assigned'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {shift.status === 'in_progress' ? '🟢 Live / Checked In' : shift.status.toUpperCase()}
+                      </span>
                       <h3 className="font-bold text-base text-slate-900">{shift.role}</h3>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      📅 {shift.date} • ⏱️ {shift.startTime} - {shift.endTime} • 💰 {formatINR(shift.payAmount)} ({formatHourlyINR(shift.hourlyRate)})
+                      📍 {shift.businessName} • 📅 {shift.date} • ⏱️ {shift.startTime} - {shift.endTime} • 💰 {formatINR(shift.payAmount)} ({formatHourlyINR(shift.hourlyRate)})
                     </p>
                   </div>
 
@@ -193,6 +292,19 @@ export const BusinessDashboard: React.FC = () => {
 
                 {/* Offer Cascade Visualization */}
                 <CascadeStatusWidget shift={shift} />
+
+                {/* Assigned Worker / Candidate status */}
+                {shift.assignedWorkerName && (
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs text-emerald-900">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Assigned Worker: <strong>{shift.assignedWorkerName}</strong></span>
+                    </div>
+                    <span className="font-bold text-emerald-700">
+                      {shift.status === 'in_progress' ? `Checked In: ${new Date(shift.checkInTime || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Confirmed Ready'}
+                    </span>
+                  </div>
+                )}
 
                 {/* Requirements & Notes */}
                 <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 pt-1 gap-2">
@@ -289,6 +401,13 @@ export const BusinessDashboard: React.FC = () => {
           onClose={() => setSelectedShiftForRating(null)}
         />
       )}
+
+      {/* Register Worker Modal */}
+      <AddWorkerModal
+        isOpen={isAddWorkerOpen}
+        onClose={() => setIsAddWorkerOpen(false)}
+        onAdded={() => refreshData()}
+      />
     </div>
   );
 };

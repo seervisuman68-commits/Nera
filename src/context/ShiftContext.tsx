@@ -17,8 +17,8 @@ interface ShiftContextType {
   startOfferCascade: (shiftId: string, candidateWorkerIds?: string[]) => Promise<void>;
   acceptShiftOffer: (shiftId: string, workerId: string) => Promise<void>;
   declineShiftOffer: (shiftId: string, workerId: string) => Promise<void>;
-  checkInWorkerQR: (shiftId: string, workerId: string, qrCodeSecret: string) => Promise<{ success: boolean; message: string }>;
-  checkOutWorkerQR: (shiftId: string, workerId: string) => Promise<{ success: boolean; message: string }>;
+  checkInWorkerQR: (shiftId: string, workerId: string, qrCodeSecret: string) => Promise<{ success: boolean; message: string; attendance?: AttendanceRecord }>;
+  checkOutWorkerQR: (shiftId: string, workerId: string) => Promise<{ success: boolean; message: string; attendance?: AttendanceRecord }>;
   submitShiftRating: (data: { shiftId: string; fromUserId: string; fromUserName: string; toUserId: string; toUserName: string; rating: number; review: string; tags: string[] }) => Promise<void>;
   getShiftById: (id: string) => Shift | undefined;
   getWorkerById: (id: string) => Worker | undefined;
@@ -37,10 +37,9 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isLoading, setIsLoading] = useState(true);
   const [, startTransition] = useTransition();
 
-  // Load live data from MongoDB Atlas backend on startup
+  // Load live data from MongoDB Atlas / API as Single Source of Truth
   const refreshData = async () => {
     try {
-      setIsLoading(true);
       const [shiftsRes, workersRes, attendanceRes, ratingsRes] = await Promise.all([
         api.getShifts().catch(() => ({ success: true, shifts: [] })),
         api.getWorkers().catch(() => ({ success: true, workers: [] })),
@@ -55,14 +54,23 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setRatings(ratingsRes.ratings || []);
       });
     } catch (err) {
-      console.warn('Error loading from MongoDB Atlas:', err);
+      console.warn('Error loading from MongoDB database:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Initial load
   useEffect(() => {
     refreshData();
+  }, []);
+
+  // Periodic real-time background sync (every 3.5 seconds) to ensure all dashboards stay synchronized
+  useEffect(() => {
+    const syncTimer = setInterval(() => {
+      refreshData();
+    }, 3500);
+    return () => clearInterval(syncTimer);
   }, []);
 
   // Offer cascade timer: auto-expire pending candidate after 2 minutes
@@ -139,20 +147,23 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const res = await api.createShift(payload);
     const newShift = res.shift;
-    setShifts((prev) => [newShift, ...prev]);
+    setShifts((prev) => [newShift, ...prev.filter(s => s.id !== newShift.id)]);
+    await refreshData();
     return newShift;
   };
 
   const addWorker = async (workerData: Partial<Worker>): Promise<Worker> => {
     const res = await api.createWorker(workerData);
     const newWorker = res.worker;
-    setWorkers((prev) => [newWorker, ...prev]);
+    setWorkers((prev) => [newWorker, ...prev.filter(w => w.id !== newWorker.id)]);
+    await refreshData();
     return newWorker;
   };
 
   const deleteShift = async (shiftId: string): Promise<void> => {
     await api.deleteShift(shiftId);
     setShifts((prev) => prev.filter((s) => s.id !== shiftId));
+    await refreshData();
   };
 
   const clearAllData = async (): Promise<void> => {
@@ -166,17 +177,20 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const startOfferCascade = async (shiftId: string, candidateWorkerIds?: string[]): Promise<void> => {
     const res = await api.launchCascade(shiftId, candidateWorkerIds);
     setShifts((prev) => prev.map((s) => (s.id === shiftId ? res.shift : s)));
+    await refreshData();
   };
 
   const acceptShiftOffer = async (shiftId: string, workerId: string): Promise<void> => {
     const res = await api.acceptShift(shiftId, workerId);
     setShifts((prev) => prev.map((s) => (s.id === shiftId ? res.shift : s)));
     setWorkers((prev) => prev.map((w) => (w.id === workerId ? { ...w, activeShiftId: shiftId } : w)));
+    await refreshData();
   };
 
   const declineShiftOffer = async (shiftId: string, workerId: string): Promise<void> => {
     const res = await api.declineShift(shiftId, workerId);
     setShifts((prev) => prev.map((s) => (s.id === shiftId ? res.shift : s)));
+    await refreshData();
   };
 
   const advanceCascadeTimerManually = async (shiftId: string): Promise<void> => {
@@ -200,9 +214,10 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
       setShifts((prev) => prev.map((s) => (s.id === shiftId ? res.shift : s)));
       if (res.attendance) {
-        setAttendanceLogs((prev) => [res.attendance!, ...prev]);
+        setAttendanceLogs((prev) => [res.attendance!, ...prev.filter(a => a.id !== res.attendance!.id)]);
       }
-      return { success: true, message: res.message };
+      await refreshData();
+      return { success: true, message: res.message, attendance: res.attendance };
     } catch (err: any) {
       return { success: false, message: err.message || 'QR Check-in verification failed' };
     }
@@ -218,8 +233,11 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         scanType: 'check_out',
       });
       setShifts((prev) => prev.map((s) => (s.id === shiftId ? res.shift : s)));
+      if (res.attendance) {
+        setAttendanceLogs((prev) => [res.attendance!, ...prev.filter(a => a.id !== res.attendance!.id)]);
+      }
       await refreshData();
-      return { success: true, message: res.message };
+      return { success: true, message: res.message, attendance: res.attendance };
     } catch (err: any) {
       return { success: false, message: err.message || 'QR Check-out verification failed' };
     }
@@ -243,16 +261,17 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateWorkerVerification = async (workerId: string, status: 'verified' | 'rejected') => {
     const res = await api.updateWorker(workerId, { verificationStatus: status });
     setWorkers((prev) => prev.map((w) => (w.id === workerId ? res.worker : w)));
+    await refreshData();
   };
 
   const getShiftById = (id: string) => shifts.find((s) => s.id === id);
-  const getWorkerById = (id: string) => workers.find((w) => w.id === id);
+  const getWorkerById = (id: string) => workers.find((w) => w.id === id || w.userId === id);
 
   const activeOfferForWorker = (workerId: string) => {
     for (const s of shifts) {
       if (s.status === 'cascading' && s.cascadeCandidates) {
         const candidate = s.cascadeCandidates[s.currentCascadeIndex || 0];
-        if (candidate && candidate.workerId === workerId && candidate.status === 'offered') {
+        if (candidate && (candidate.workerId === workerId || candidate.workerId === workerId) && candidate.status === 'offered') {
           return { shift: s, candidate };
         }
       }

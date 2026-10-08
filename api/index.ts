@@ -15,9 +15,9 @@ app.use(cors({
 app.use(express.json());
 
 // --- Global Request Logger ---
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
-  console.log(`[VERCEL API] [${timestamp}] ${req.method} ${req.originalUrl}`);
+  console.log(`[API REQUEST] [${timestamp}] ${req.method} ${req.originalUrl}`);
   if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
     console.log(`[REQUEST BODY]`, JSON.stringify(req.body));
   }
@@ -85,6 +85,19 @@ const WorkerSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
+const ShiftOfferSchema = new mongoose.Schema({
+  shiftId: { type: String, required: true },
+  workerId: { type: String, required: true },
+  workerName: { type: String, default: '' },
+  workerAvatar: { type: String, default: '' },
+  businessId: { type: String, default: '' },
+  matchScore: { type: Number, default: 90 },
+  status: { type: String, enum: ['offered', 'pending', 'accepted', 'rejected', 'expired'], default: 'pending' },
+  offeredAt: { type: String, default: null },
+  expiresAt: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+});
+
 const ShiftSchema = new mongoose.Schema({
   id: { type: String, unique: true, required: true },
   businessId: { type: String, required: true },
@@ -106,12 +119,12 @@ const ShiftSchema = new mongoose.Schema({
   totalCost: { type: Number, required: true }, // In INR ₹
   urgency: { type: String, default: 'EMERGENCY (Immediate)' },
   notes: { type: String, default: '' },
-  status: { type: String, default: 'open' },
+  status: { type: String, enum: ['open', 'cascading', 'assigned', 'in_progress', 'completed', 'cancelled'], default: 'open' },
   assignedWorkerId: { type: String, default: null },
   assignedWorkerName: { type: String, default: null },
   backupWorkerId: { type: String, default: null },
   backupWorkerName: { type: String, default: null },
-  cascadeCandidates: { type: Array, default: [] },
+  cascadeCandidates: { type: [ShiftOfferSchema], default: [] },
   currentCascadeIndex: { type: Number, default: 0 },
   qrCodeSecret: { type: String, required: true },
   checkInTime: { type: String, default: null },
@@ -129,11 +142,13 @@ const AttendanceSchema = new mongoose.Schema({
   role: { type: String, default: '' },
   checkInTime: { type: String, required: true },
   checkOutTime: { type: String, default: null },
-  status: { type: String, default: 'checked_in' },
+  status: { type: String, enum: ['checked_in', 'completed'], default: 'checked_in' },
   verifiedBy: { type: String, default: 'qr_scan' },
+  verificationMethod: { type: String, default: 'QR + GPS' },
   locationVerified: { type: Boolean, default: true },
   date: { type: String, default: () => new Date().toISOString().split('T')[0] },
   createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
 
 const RatingSchema = new mongoose.Schema({
@@ -213,13 +228,13 @@ export async function connectToDatabase(): Promise<{ isConnected: boolean; sourc
   }
 }
 
-// Ensure DB connected before processing routes
+// Middleware to ensure DB connection before every request
 app.use(async (_req: Request, _res: Response, next: NextFunction) => {
   await connectToDatabase();
   next();
 });
 
-// --- Distance Helper & Smart Match Algorithm ---
+// --- Haversine Distance Helper & 5-Factor Weighted Smart Matching ---
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371.0;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -270,16 +285,17 @@ function computeMatchScore(worker: any, shift: any) {
 // Router to support both `/api/v1/...` and `/api/...` paths seamlessly
 const router = express.Router();
 
-// Health Check
+// 1. Health & Database Diagnostics
 router.get(['/health', '/v1/health'], async (_req: Request, res: Response) => {
   const dbStatus = await connectToDatabase();
   const usersCount = dbStatus.isConnected ? await UserModel.countDocuments() : 0;
   const workersCount = dbStatus.isConnected ? await WorkerModel.countDocuments() : 0;
   const shiftsCount = dbStatus.isConnected ? await ShiftModel.countDocuments() : 0;
+  const attendanceCount = dbStatus.isConnected ? await AttendanceModel.countDocuments() : 0;
 
   res.json({
     status: dbStatus.isConnected ? 'online' : 'database_connecting',
-    service: 'NERA Emergency Shift Platform API (Vercel Serverless / Express)',
+    service: 'NERA Emergency Shift Platform Unified Backend',
     database: dbStatus.source,
     connectionError: dbStatus.error,
     currency: 'INR (₹)',
@@ -288,104 +304,32 @@ router.get(['/health', '/v1/health'], async (_req: Request, res: Response) => {
       users: usersCount,
       workers: workersCount,
       shifts: shiftsCount,
+      attendance: attendanceCount,
     },
   });
 });
 
-// Test Endpoint: Insert Sample User & Verify
-router.post(['/test/insert-user', '/v1/test/insert-user'], async (req: Request, res: Response) => {
-  try {
-    const dbStatus = await connectToDatabase();
-    if (!dbStatus.isConnected) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database is disconnected',
-        details: dbStatus.error,
-      });
-    }
-
-    const { name, email, role, phone } = req.body;
-    const testId = `test-user-${Date.now()}`;
-    const testUser = {
-      id: testId,
-      name: name || 'Audit Test User',
-      email: (email || `test-${Date.now()}@nera.in`).toLowerCase(),
-      role: role || 'worker',
-      phone: phone || '+91 98765 00000',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      createdAt: new Date(),
-    };
-
-    const doc = await UserModel.create(testUser);
-    const verified = await UserModel.findOne({ id: testId });
-    const totalUsers = await UserModel.countDocuments();
-
-    res.status(201).json({
-      success: true,
-      message: `Sample user created and verified in ${dbStatus.source}`,
-      activeDatabase: dbStatus.source,
-      isAtlasConnected: dbStatus.source.includes('Atlas'),
-      document: verified || doc,
-      totalUsersInCollection: totalUsers,
-      auditChecklist: {
-        envLoaded: Boolean(process.env.MONGODB_URI),
-        mongooseConnect: true,
-        routeReceived: true,
-        bodyParsed: true,
-        mongooseSaved: true,
-        databaseVerified: true,
-      },
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Verify Atlas Status
-router.get(['/test/verify-atlas', '/v1/test/verify-atlas'], async (_req: Request, res: Response) => {
-  const dbStatus = await connectToDatabase();
-  const maskedUri = process.env.MONGODB_URI
-    ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':****@')
-    : 'NOT_SET';
-
-  res.json({
-    success: true,
-    audit: {
-      configuredUri: maskedUri,
-      activeDatabase: dbStatus.source,
-      isAtlasConnected: dbStatus.source.includes('Atlas'),
-      connectionState: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-      databaseName: mongoose.connection.name || 'nera_db',
-      host: mongoose.connection.host || 'unknown',
-      connectionError: dbStatus.error,
-      counts: {
-        users: dbStatus.isConnected ? await UserModel.countDocuments() : 0,
-        workers: dbStatus.isConnected ? await WorkerModel.countDocuments() : 0,
-        businesses: dbStatus.isConnected ? await BusinessModel.countDocuments() : 0,
-        shifts: dbStatus.isConnected ? await ShiftModel.countDocuments() : 0,
-      },
-    },
-  });
-});
-
-// Auth Routes
+// 2. Auth Module
 router.post(['/auth/register', '/v1/auth/register'], async (req: Request, res: Response) => {
   try {
     const { name, email, role, phone } = req.body;
-    const userId = `user-${Date.now()}`;
-    const user = {
-      id: userId,
-      name: name || 'New User',
-      email: (email || `user-${Date.now()}@nera.in`).toLowerCase(),
-      role: role || 'business',
-      phone: phone || '+91 98765 43210',
-      avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
-      createdAt: new Date(),
-    };
+    const cleanEmail = (email || `user-${Date.now()}@nera.in`).toLowerCase();
 
-    if (mongoose.connection.readyState === 1) {
-      await UserModel.create(user);
+    // Check if user already exists
+    let user = await UserModel.findOne({ email: cleanEmail });
+    if (!user) {
+      const userId = `user-${Date.now()}`;
+      user = await UserModel.create({
+        id: userId,
+        name: name || 'New User',
+        email: cleanEmail,
+        role: role || 'business',
+        phone: phone || '+91 98765 43210',
+        avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80`,
+        createdAt: new Date(),
+      });
     }
+
     res.status(201).json({ success: true, user, token: `jwt_nera_${user.id}` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -395,37 +339,34 @@ router.post(['/auth/register', '/v1/auth/register'], async (req: Request, res: R
 router.post(['/auth/login', '/v1/auth/login'], async (req: Request, res: Response) => {
   try {
     const { email, role } = req.body;
-    let user: any = null;
-    if (mongoose.connection.readyState === 1 && email) {
-      user = await UserModel.findOne({ email: email.toLowerCase() });
-    }
+    const cleanEmail = (email || 'demo@nera.in').toLowerCase();
+    let user = await UserModel.findOne({ email: cleanEmail });
+
     if (!user) {
-      user = {
+      user = await UserModel.create({
         id: `user-${Date.now()}`,
         name: email ? email.split('@')[0] : 'User',
-        email: (email || 'user@nera.in').toLowerCase(),
+        email: cleanEmail,
         role: role || 'business',
         phone: '+91 98765 43210',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         createdAt: new Date(),
-      };
-      if (mongoose.connection.readyState === 1) {
-        await UserModel.create(user);
-      }
+      });
     }
+
     res.json({ success: true, user, token: `jwt_nera_${user.id}` });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Users
+// 3. Users Collection
 router.get(['/users', '/v1/users'], async (_req: Request, res: Response) => {
   const users = mongoose.connection.readyState === 1 ? await UserModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, users });
 });
 
-// Businesses
+// 4. Businesses Collection
 router.get(['/businesses', '/v1/businesses'], async (_req: Request, res: Response) => {
   const businesses = mongoose.connection.readyState === 1 ? await BusinessModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, businesses });
@@ -440,9 +381,21 @@ router.get(['/businesses/:id', '/v1/businesses/:id'], async (req: Request, res: 
 router.post(['/businesses', '/v1/businesses'], async (req: Request, res: Response) => {
   try {
     const bizData = req.body;
+    const userId = bizData.userId || `user-${Date.now()}`;
+
+    // Upsert business if one already exists for this userId
+    let existing = await BusinessModel.findOne({ $or: [{ userId }, { id: bizData.id }] });
+    if (existing) {
+      existing.companyName = bizData.companyName || existing.companyName;
+      existing.category = bizData.category || existing.category;
+      existing.address = bizData.address || existing.address;
+      await existing.save();
+      return res.json({ success: true, business: existing });
+    }
+
     const newBiz = {
       id: bizData.id || `biz-${Date.now()}`,
-      userId: bizData.userId || `user-${Date.now()}`,
+      userId,
       companyName: bizData.companyName || 'My Business',
       category: bizData.category || 'café',
       address: bizData.address || 'MG Road, Bangalore',
@@ -455,16 +408,14 @@ router.post(['/businesses', '/v1/businesses'], async (req: Request, res: Respons
       createdAt: new Date(),
     };
 
-    if (mongoose.connection.readyState === 1) {
-      await BusinessModel.create(newBiz);
-    }
-    res.status(201).json({ success: true, business: newBiz });
+    const doc = await BusinessModel.create(newBiz);
+    res.status(201).json({ success: true, business: doc });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Workers
+// 5. Workers Collection (Single Source of Truth)
 router.get(['/workers', '/v1/workers'], async (_req: Request, res: Response) => {
   const workers = mongoose.connection.readyState === 1 ? await WorkerModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, workers });
@@ -479,18 +430,34 @@ router.get(['/workers/:id', '/v1/workers/:id'], async (req: Request, res: Respon
 router.post(['/workers', '/v1/workers'], async (req: Request, res: Response) => {
   try {
     const w = req.body;
+    const userId = w.userId || `user-${Date.now()}`;
+
+    // Duplicate check: If worker with this userId or id exists, update and return it
+    let existing = await WorkerModel.findOne({ $or: [{ userId }, { id: w.id }] });
+    if (existing) {
+      existing.name = w.name || existing.name;
+      existing.role = w.role || existing.role;
+      existing.skills = w.skills || existing.skills;
+      existing.hourlyRate = Number(w.hourlyRate) || existing.hourlyRate;
+      existing.reliabilityScore = Number(w.reliabilityScore) || existing.reliabilityScore;
+      existing.availabilityStatus = w.availabilityStatus || existing.availabilityStatus;
+      existing.isAvailable = w.availabilityStatus === 'Available Now';
+      await existing.save();
+      return res.json({ success: true, worker: existing });
+    }
+
     const newWorker = {
       id: w.id || `w-${Date.now()}`,
-      userId: w.userId || `user-${Date.now()}`,
+      userId,
       name: w.name || 'Emergency Worker',
       role: w.role || 'Barista & Staff',
-      avatar: w.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      avatar: w.avatar || `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 500)}?w=150&auto=format&fit=crop&q=80`,
       phone: w.phone || '+91 98765 43210',
       bio: w.bio || 'Verified hospitality and emergency shift professional.',
-      skills: w.skills || ['Customer Service', 'POS Operations'],
+      skills: w.skills && w.skills.length > 0 ? w.skills : ['Barista', 'POS Operations'],
       experienceYears: Number(w.experienceYears) || 2,
       reliabilityScore: Number(w.reliabilityScore) || 96.0,
-      isAvailable: w.isAvailable !== undefined ? w.isAvailable : true,
+      isAvailable: w.availabilityStatus !== undefined ? w.availabilityStatus === 'Available Now' : true,
       availabilityStatus: w.availabilityStatus || 'Available Now',
       location: w.location || { latitude: 12.9716, longitude: 77.5946, address: 'Indiranagar, Bangalore (1.2 km)' },
       verificationStatus: w.verificationStatus || 'verified',
@@ -507,10 +474,8 @@ router.post(['/workers', '/v1/workers'], async (req: Request, res: Response) => 
       createdAt: new Date(),
     };
 
-    if (mongoose.connection.readyState === 1) {
-      await WorkerModel.create(newWorker);
-    }
-    res.status(201).json({ success: true, worker: newWorker });
+    const doc = await WorkerModel.create(newWorker);
+    res.status(201).json({ success: true, worker: doc });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -532,7 +497,7 @@ router.patch(['/workers/:id', '/v1/workers/:id'], async (req: Request, res: Resp
   }
 });
 
-// Shifts
+// 6. Shifts Collection
 router.get(['/shifts', '/v1/shifts'], async (_req: Request, res: Response) => {
   const shifts = mongoose.connection.readyState === 1 ? await ShiftModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, shifts });
@@ -579,11 +544,9 @@ router.post(['/shifts', '/v1/shifts'], async (req: Request, res: Response) => {
       createdAt: new Date(),
     };
 
-    if (mongoose.connection.readyState === 1) {
-      await ShiftModel.create(newShift);
-      await BusinessModel.updateOne({ id: newShift.businessId }, { $inc: { shiftsPosted: 1 } });
-    }
-    res.status(201).json({ success: true, shift: newShift });
+    const doc = await ShiftModel.create(newShift);
+    await BusinessModel.updateOne({ id: newShift.businessId }, { $inc: { shiftsPosted: 1 } });
+    res.status(201).json({ success: true, shift: doc });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -608,7 +571,7 @@ router.delete(['/shifts/:id', '/v1/shifts/:id'], async (req: Request, res: Respo
   res.json({ success: true, message: 'Shift deleted successfully' });
 });
 
-// Smart Matching & Cascade
+// 7. Smart Matching & Cascade Pipeline
 router.get(['/shifts/:id/matches', '/v1/shifts/:id/matches'], async (req: Request, res: Response) => {
   const shift = mongoose.connection.readyState === 1 ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
@@ -628,13 +591,15 @@ router.post(['/shifts/:id/cascade', '/v1/shifts/:id/cascade'], async (req: Reque
 
   shift.status = 'cascading';
   shift.cascadeCandidates = ranked.map((match: any, idx: number) => ({
+    shiftId: shift.id,
     workerId: match.worker.id,
     workerName: match.worker.name,
     workerAvatar: match.worker.avatar,
+    businessId: shift.businessId,
     matchScore: match.totalScore,
     status: idx === 0 ? 'offered' : 'pending',
-    offeredAt: idx === 0 ? new Date().toISOString() : undefined,
-    expiresAt: idx === 0 ? new Date(now + 120000).toISOString() : undefined,
+    offeredAt: idx === 0 ? new Date().toISOString() : null,
+    expiresAt: idx === 0 ? new Date(now + 120000).toISOString() : null,
   }));
   shift.currentCascadeIndex = 0;
 
@@ -650,10 +615,10 @@ router.post(['/shifts/:id/accept', '/v1/shifts/:id/accept'], async (req: Request
   const shift = mongoose.connection.readyState === 1 ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
-  const worker = mongoose.connection.readyState === 1 ? await WorkerModel.findOne({ id: workerId }) : null;
+  const worker = mongoose.connection.readyState === 1 ? await WorkerModel.findOne({ $or: [{ id: workerId }, { userId: workerId }] }) : null;
   if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
 
-  const otherCandidates = (shift.cascadeCandidates || []).filter((c: any) => c.workerId !== workerId);
+  const otherCandidates = (shift.cascadeCandidates || []).filter((c: any) => c.workerId !== worker.id);
   const backupCandidate = otherCandidates.length > 0 ? otherCandidates[0] : null;
 
   shift.status = 'assigned';
@@ -662,12 +627,12 @@ router.post(['/shifts/:id/accept', '/v1/shifts/:id/accept'], async (req: Request
   shift.backupWorkerId = backupCandidate ? backupCandidate.workerId : null;
   shift.backupWorkerName = backupCandidate ? backupCandidate.workerName : null;
   shift.cascadeCandidates = (shift.cascadeCandidates || []).map((c: any) =>
-    c.workerId === workerId ? { ...c, status: 'accepted' } : c
+    c.workerId === worker.id ? { ...c, status: 'accepted' } : c
   );
 
   if (mongoose.connection.readyState === 1) {
     await shift.save();
-    await WorkerModel.updateOne({ id: workerId }, { activeShiftId: shift.id });
+    await WorkerModel.updateOne({ id: worker.id }, { activeShiftId: shift.id });
   }
 
   res.json({ success: true, message: 'Shift offer accepted', shift });
@@ -703,7 +668,7 @@ router.post(['/shifts/:id/decline', '/v1/shifts/:id/decline'], async (req: Reque
   res.json({ success: true, message: 'Shift offer declined. Forwarded in cascade.', shift });
 });
 
-// QR Attendance
+// 8. QR Attendance & Verification Hub
 router.get(['/shifts/:id/qr-code', '/v1/shifts/:id/qr-code'], async (req: Request, res: Response) => {
   const shift = mongoose.connection.readyState === 1 ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
@@ -721,9 +686,10 @@ router.get(['/shifts/:id/qr-code', '/v1/shifts/:id/qr-code'], async (req: Reques
   });
 });
 
-router.get(['/attendance', '/v1/attendance'], async (_req: Request, res: Response) => {
+// Admin & App Attendance History Endpoints
+router.get(['/attendance', '/v1/attendance', '/admin/attendance', '/v1/admin/attendance'], async (_req: Request, res: Response) => {
   const attendance = mongoose.connection.readyState === 1 ? await AttendanceModel.find().sort({ createdAt: -1 }) : [];
-  res.json({ success: true, attendance });
+  res.json({ success: true, count: attendance.length, attendance });
 });
 
 router.post(['/attendance/scan', '/v1/attendance/scan'], async (req: Request, res: Response) => {
@@ -739,10 +705,40 @@ router.post(['/attendance/scan', '/v1/attendance/scan'], async (req: Request, re
   if (scanType === 'check_out') {
     shift.status = 'completed';
     shift.checkOutTime = now;
+
+    let attendanceDoc = null;
     if (mongoose.connection.readyState === 1) {
-      await AttendanceModel.updateOne({ shiftId, workerId }, { checkOutTime: now, status: 'completed' });
+      // Find existing check-in record and update with check-out
+      attendanceDoc = await AttendanceModel.findOneAndUpdate(
+        { shiftId, $or: [{ workerId }, { workerId: shift.assignedWorkerId }] },
+        { $set: { checkOutTime: now, status: 'completed', updatedAt: new Date() } },
+        { new: true }
+      );
+
+      // If no check-in record was found, create completed record
+      if (!attendanceDoc) {
+        attendanceDoc = await AttendanceModel.create({
+          id: `att-${Date.now()}`,
+          shiftId: shift.id,
+          workerId: workerId || shift.assignedWorkerId,
+          workerName: shift.assignedWorkerName || 'Worker',
+          businessId: shift.businessId,
+          businessName: shift.businessName,
+          role: shift.role,
+          checkInTime: shift.checkInTime || now,
+          checkOutTime: now,
+          status: 'completed',
+          verifiedBy: 'qr_scan',
+          verificationMethod: 'QR + GPS',
+          locationVerified: true,
+          date: shift.date,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+
       await WorkerModel.updateOne(
-        { id: workerId },
+        { $or: [{ id: workerId }, { id: shift.assignedWorkerId }] },
         {
           $inc: { totalShiftsCompleted: 1, earningsTotal: shift.payAmount },
           $set: { activeShiftId: null },
@@ -751,35 +747,68 @@ router.post(['/attendance/scan', '/v1/attendance/scan'], async (req: Request, re
       await BusinessModel.updateOne({ id: shift.businessId }, { $inc: { totalSpent: shift.totalCost } });
       await shift.save();
     }
-    return res.json({ success: true, message: `Check-out verified! Payment of ₹${shift.payAmount} unlocked.`, shift });
+    return res.json({
+      success: true,
+      message: `Check-out verified! Payment of ₹${shift.payAmount} unlocked.`,
+      shift,
+      attendance: attendanceDoc,
+    });
   } else {
+    // Check-in
     shift.status = 'in_progress';
     shift.checkInTime = now;
-    const attendanceRecord = {
-      id: `att-${Date.now()}`,
-      shiftId: shift.id,
-      workerId: workerId,
-      workerName: shift.assignedWorkerName || 'Worker',
-      businessId: shift.businessId,
-      businessName: shift.businessName,
-      role: shift.role,
-      checkInTime: now,
-      status: 'checked_in',
-      verifiedBy: 'qr_scan',
-      locationVerified: true,
-      date: shift.date,
-      createdAt: new Date(),
-    };
 
+    let attendanceRecord = null;
     if (mongoose.connection.readyState === 1) {
-      await AttendanceModel.create(attendanceRecord);
+      // Upsert check-in
+      attendanceRecord = await AttendanceModel.findOneAndUpdate(
+        { shiftId, $or: [{ workerId }, { workerId: shift.assignedWorkerId }] },
+        {
+          $set: {
+            checkInTime: now,
+            status: 'checked_in',
+            verificationMethod: 'QR + GPS',
+            verifiedBy: 'qr_scan',
+            updatedAt: new Date(),
+          },
+        },
+        { new: true }
+      );
+
+      if (!attendanceRecord) {
+        attendanceRecord = await AttendanceModel.create({
+          id: `att-${Date.now()}`,
+          shiftId: shift.id,
+          workerId: workerId || shift.assignedWorkerId,
+          workerName: shift.assignedWorkerName || 'Worker',
+          businessId: shift.businessId,
+          businessName: shift.businessName,
+          role: shift.role,
+          checkInTime: now,
+          checkOutTime: null,
+          status: 'checked_in',
+          verifiedBy: 'qr_scan',
+          verificationMethod: 'QR + GPS',
+          locationVerified: true,
+          date: shift.date,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+
       await shift.save();
     }
-    return res.json({ success: true, message: `Check-in verified at ${shift.businessName}! Shift is live.`, shift, attendance: attendanceRecord });
+
+    return res.json({
+      success: true,
+      message: `Check-in verified at ${shift.businessName}! Shift is live.`,
+      shift,
+      attendance: attendanceRecord,
+    });
   }
 });
 
-// Ratings
+// 9. Ratings Module
 router.get(['/ratings', '/v1/ratings'], async (_req: Request, res: Response) => {
   const ratings = mongoose.connection.readyState === 1 ? await RatingModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, ratings });
@@ -818,7 +847,7 @@ router.post(['/ratings', '/v1/ratings'], async (req: Request, res: Response) => 
   }
 });
 
-// Analytics
+// 10. Platform Analytics Engine
 router.get(['/analytics', '/v1/analytics'], async (_req: Request, res: Response) => {
   const shifts = mongoose.connection.readyState === 1 ? await ShiftModel.find() : [];
   const completed = shifts.filter((s: any) => s.status === 'completed');
@@ -848,7 +877,7 @@ router.get(['/analytics', '/v1/analytics'], async (_req: Request, res: Response)
   });
 });
 
-// Clear Database
+// 11. Database Clear / Wipe
 router.post(['/database/clear', '/v1/database/clear'], async (_req: Request, res: Response) => {
   if (mongoose.connection.readyState === 1) {
     await ShiftModel.deleteMany({});
@@ -861,11 +890,11 @@ router.post(['/database/clear', '/v1/database/clear'], async (_req: Request, res
   res.json({ success: true, message: 'All MongoDB collections wiped clean. 0 records remaining.' });
 });
 
-// Mount router on both `/api` and `/` so `/api/v1/workers` and `/v1/workers` match regardless of Vercel rewrite prefix
+// Mount router on `/api` and `/`
 app.use('/api', router);
 app.use('/', router);
 
-// Error fallback
+// Error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[UNCAUGHT SERVER ERROR]', err);
   res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
