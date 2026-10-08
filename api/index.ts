@@ -43,7 +43,7 @@ export async function ensureMongoConnected(): Promise<typeof mongoose> {
     return cached.conn;
   }
 
-  const rawUri = process.env.MONGODB_URI;
+  const rawUri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGODB_URL || process.env.DATABASE_URL;
   if (!rawUri || rawUri.trim() === '') {
     console.error('❌ [DATABASE AUDIT] MONGODB_URI is missing from environment variables.');
     throw new Error('MONGODB_URI environment variable is missing. Please set MONGODB_URI in Vercel project settings.');
@@ -91,7 +91,7 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
       success: false,
       error: `MongoDB Atlas Connection Error: ${err.message}`,
       diagnostic: {
-        uriConfigured: Boolean(process.env.MONGODB_URI),
+        uriConfigured: Boolean(process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGODB_URL || process.env.DATABASE_URL),
         errorDetails: err.message,
         instructions: [
           '1. Ensure MONGODB_URI is added in Vercel Project Settings -> Environment Variables.',

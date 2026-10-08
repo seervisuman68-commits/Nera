@@ -14,11 +14,12 @@ import {
   Camera,
   Search,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 
 export const AttendancePage: React.FC = () => {
-  const { attendanceLogs, shifts, workers, refreshData } = useShifts();
+  const { attendanceLogs, shifts, workers, refreshData, dbError } = useShifts();
   const { currentUser, currentWorker } = useAuth();
 
   const [activeShiftScanner, setActiveShiftScanner] = useState<any | null>(null);
@@ -41,6 +42,30 @@ export const AttendancePage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Database Connection Error Banner */}
+      {dbError && (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-3xl p-5 text-rose-900 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-rose-100 rounded-2xl text-rose-600 shrink-0">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-black text-sm text-rose-950">Database connection failed</h3>
+              <p className="text-xs text-rose-800 mt-0.5">{dbError}</p>
+              <p className="text-[11px] text-rose-700 mt-1 font-semibold">
+                Add <span className="font-mono bg-rose-200/80 px-1.5 py-0.5 rounded text-rose-900">MONGODB_URI</span> in Vercel → Project → Settings → Environment Variables and trigger a Redeployment.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleManualRefresh}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -156,8 +181,25 @@ export const AttendancePage: React.FC = () => {
         {filteredLogs.length === 0 ? (
           <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl space-y-2">
             <QrCode className="w-8 h-8 text-slate-300 mx-auto" />
-            <h4 className="font-bold text-sm text-slate-700">No Attendance Records</h4>
-            <p className="text-xs text-slate-400">When workers scan the QR check-in code at venues, records appear here immediately.</p>
+            {dbError ? (
+              <>
+                <h4 className="font-bold text-sm text-rose-700">Database connection failed</h4>
+                <p className="text-xs text-rose-500 max-w-sm mx-auto">
+                  Unable to load attendance logs from MongoDB. Please check <code className="bg-rose-100 px-1 py-0.5 rounded font-bold">MONGODB_URI</code> in Vercel settings.
+                </p>
+                <button
+                  onClick={handleManualRefresh}
+                  className="mt-2 px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold"
+                >
+                  Retry Connection
+                </button>
+              </>
+            ) : (
+              <>
+                <h4 className="font-bold text-sm text-slate-700">No Attendance Records</h4>
+                <p className="text-xs text-slate-400">When workers scan the QR check-in code at venues, records appear here immediately.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

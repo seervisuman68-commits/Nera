@@ -28,7 +28,7 @@ import {
 
 export const BusinessDashboard: React.FC = () => {
   const { currentBusiness } = useAuth();
-  const { shifts, attendanceLogs, ratings, workers, refreshData } = useShifts();
+  const { shifts, attendanceLogs, ratings, workers, refreshData, dbError, isDbConnected } = useShifts();
   const navigate = useNavigate();
 
   const [selectedShiftForQR, setSelectedShiftForQR] = useState<Shift | null>(null);
@@ -48,6 +48,30 @@ export const BusinessDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Database Connection Error Banner */}
+      {dbError && (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-3xl p-5 text-rose-900 shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-rose-100 rounded-2xl text-rose-600 shrink-0">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-black text-sm text-rose-950">Database connection failed</h3>
+              <p className="text-xs text-rose-800 mt-0.5">{dbError}</p>
+              <p className="text-[11px] text-rose-700 mt-1 font-semibold">
+                Add <span className="font-mono bg-rose-200/80 px-1.5 py-0.5 rounded text-rose-900">MONGODB_URI</span> in Vercel → Project → Settings → Environment Variables and trigger a Redeployment.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => refreshData()}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shrink-0 shadow-sm transition-all"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
       {/* Top Banner & Header */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden border border-slate-800">
         <div className="relative z-10">
@@ -158,14 +182,31 @@ export const BusinessDashboard: React.FC = () => {
         {workers.length === 0 ? (
           <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl space-y-2">
             <Users className="w-8 h-8 text-slate-300 mx-auto" />
-            <h4 className="font-bold text-sm text-slate-700">No Workers Registered Yet</h4>
-            <p className="text-xs text-slate-400">Click below to register the first worker to the MongoDB database pool.</p>
-            <button
-              onClick={() => setIsAddWorkerOpen(true)}
-              className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold"
-            >
-              + Register Worker
-            </button>
+            {dbError ? (
+              <>
+                <h4 className="font-bold text-sm text-rose-700">Database connection failed</h4>
+                <p className="text-xs text-rose-500 max-w-sm mx-auto">
+                  Unable to connect to MongoDB Atlas. Ensure <code className="bg-rose-100 px-1 py-0.5 rounded font-bold">MONGODB_URI</code> is configured in Vercel.
+                </p>
+                <button
+                  onClick={() => refreshData()}
+                  className="mt-2 px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold"
+                >
+                  Retry Connection
+                </button>
+              </>
+            ) : (
+              <>
+                <h4 className="font-bold text-sm text-slate-700">No Workers Registered Yet</h4>
+                <p className="text-xs text-slate-400">Click below to register the first worker to the MongoDB database pool.</p>
+                <button
+                  onClick={() => setIsAddWorkerOpen(true)}
+                  className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold"
+                >
+                  + Register Worker
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -231,17 +272,28 @@ export const BusinessDashboard: React.FC = () => {
             <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
               <Clock className="w-6 h-6" />
             </div>
-            <h4 className="font-bold text-slate-800 text-sm">No Active Emergency Shifts Right Now</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Need coverage today? Click below to immediately match verified workers in under 15 minutes.
-            </p>
-            <Link
-              to="/create-shift"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Post Emergency Shift
-            </Link>
+            {dbError ? (
+              <>
+                <h4 className="font-bold text-rose-800 text-sm">Database connection failed</h4>
+                <p className="text-xs text-rose-600 max-w-sm mx-auto">
+                  Unable to load shifts from MongoDB. Check <code className="bg-rose-100 px-1 py-0.5 rounded font-bold">MONGODB_URI</code> in Vercel environment settings.
+                </p>
+              </>
+            ) : (
+              <>
+                <h4 className="font-bold text-slate-800 text-sm">No Active Emergency Shifts Right Now</h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Need coverage today? Click below to immediately match verified workers in under 15 minutes.
+                </p>
+                <Link
+                  to="/create-shift"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Post Emergency Shift
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

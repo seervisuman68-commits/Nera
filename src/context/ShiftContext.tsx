@@ -9,6 +9,8 @@ interface ShiftContextType {
   ratings: Rating[];
   analytics: PlatformAnalytics;
   isLoading: boolean;
+  dbError: string | null;
+  isDbConnected: boolean;
   refreshData: () => Promise<void>;
   createShift: (shiftData: Partial<Shift>) => Promise<Shift>;
   addWorker: (workerData: Partial<Worker>) => Promise<Worker>;
@@ -35,26 +37,35 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceRecord[]>([]);
   const [ratings, setRatings] = useState<Rating[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(true);
   const [, startTransition] = useTransition();
 
   // Load live data from MongoDB Atlas / API as Single Source of Truth
   const refreshData = async () => {
     try {
       const [shiftsRes, workersRes, attendanceRes, ratingsRes] = await Promise.all([
-        api.getShifts().catch(() => ({ success: true, shifts: [] })),
-        api.getWorkers().catch(() => ({ success: true, workers: [] })),
-        api.getAttendanceLogs().catch(() => ({ success: true, attendance: [] })),
-        api.getRatings().catch(() => ({ success: true, ratings: [] })),
+        api.getShifts(),
+        api.getWorkers(),
+        api.getAttendanceLogs(),
+        api.getRatings(),
       ]);
 
       startTransition(() => {
-        setShifts(shiftsRes.shifts || []);
-        setWorkers(workersRes.workers || []);
-        setAttendanceLogs(attendanceRes.attendance || []);
-        setRatings(ratingsRes.ratings || []);
+        setDbError(null);
+        setIsDbConnected(true);
+        setShifts(shiftsRes?.shifts || []);
+        setWorkers(workersRes?.workers || []);
+        setAttendanceLogs(attendanceRes?.attendance || []);
+        setRatings(ratingsRes?.ratings || []);
       });
-    } catch (err) {
-      console.warn('Error loading from MongoDB database:', err);
+    } catch (err: any) {
+      console.warn('❌ [ShiftContext] Database connection error during live sync:', err.message);
+      const errMsg = err?.message || 'Database connection failed';
+      startTransition(() => {
+        setDbError(errMsg);
+        setIsDbConnected(false);
+      });
     } finally {
       setIsLoading(false);
     }
@@ -309,6 +320,8 @@ export const ShiftProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ratings,
         analytics,
         isLoading,
+        dbError,
+        isDbConnected,
         refreshData,
         createShift,
         addWorker,
