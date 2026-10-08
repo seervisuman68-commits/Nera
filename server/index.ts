@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
@@ -11,6 +11,25 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 app.use(cors());
 app.use(express.json());
+
+// --- Global Logging Middleware for End-to-End Audit ---
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const timestamp = new Date().toISOString();
+  console.log(`\n======================================================`);
+  console.log(`[EXPRESS ROUTE] [${timestamp}] ${req.method} ${req.originalUrl}`);
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    console.log(`[REQUEST BODY]`, JSON.stringify(req.body, null, 2));
+  }
+  
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[EXPRESS RESPONSE] ${req.method} ${req.originalUrl} -> Status ${res.statusCode} (${duration}ms)`);
+    console.log(`======================================================\n`);
+  });
+  
+  next();
+});
 
 // --- MongoDB Schemas & Collections ---
 const UserSchema = new mongoose.Schema({
@@ -144,33 +163,46 @@ export const ShiftModel = mongoose.models.Shift || mongoose.model('Shift', Shift
 export const AttendanceModel = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
 export const RatingModel = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
 
-// --- Database Connection Initialization ---
+// --- Database Connection Initialization & Diagnostics ---
 let isMongoConnected = false;
 let dbSource = 'Disconnected';
+let connectionErrorDetails: string | null = null;
 
 async function connectMongo() {
+  console.log('\n[DATABASE AUDIT] Step 1: Loading MONGODB_URI from environment...');
   if (MONGODB_URI && MONGODB_URI.trim() !== '') {
+    const maskedUri = MONGODB_URI.replace(/:([^@]+)@/, ':****@');
+    console.log(`[DATABASE AUDIT] Loaded MONGODB_URI: ${maskedUri}`);
     try {
-      console.log('🔄 Connecting to MongoDB Atlas...');
-      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+      console.log('[DATABASE AUDIT] Step 2: Attempting mongoose.connect() to MongoDB Atlas...');
+      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 6000 });
       isMongoConnected = true;
       dbSource = 'MongoDB Atlas';
-      console.log('✅ Connected to MongoDB Atlas successfully! No dummy data loaded.');
+      connectionErrorDetails = null;
+      console.log('✅ [DATABASE AUDIT] mongoose.connect() SUCCESSFUL! Connected to MongoDB Atlas Cloud.');
       return;
     } catch (err: any) {
-      console.error(`⚠️ MongoDB Atlas Connection Error: ${err.message}`);
+      connectionErrorDetails = err.message;
+      console.error(`⚠️ [DATABASE AUDIT] MongoDB Atlas Connection FAILED: ${err.message}`);
+      if (err.message.includes('bad auth') || err.message.includes('Authentication failed')) {
+        console.error('❌ [DATABASE AUDIT ERROR REASON] MongoDB Atlas rejected the username/password in MONGODB_URI.');
+      } else if (err.message.includes('queryTxt ETIMEOUT') || err.message.includes('ENOTFOUND')) {
+        console.error('❌ [DATABASE AUDIT ERROR REASON] DNS resolution failed for the Atlas cluster host.');
+      }
     }
+  } else {
+    console.warn('⚠️ [DATABASE AUDIT] No MONGODB_URI defined in .env file.');
   }
 
-  // Fallback to local MongoDB if Atlas connection fails
+  // Fallback to local MongoDB
   try {
-    console.log('🔄 Connecting to Local MongoDB (mongodb://127.0.0.1:27017/nera_db)...');
+    console.log('[DATABASE AUDIT] Falling back to Local MongoDB (mongodb://127.0.0.1:27017/nera_db)...');
     await mongoose.connect('mongodb://127.0.0.1:27017/nera_db', { serverSelectionTimeoutMS: 3000 });
     isMongoConnected = true;
     dbSource = 'Local MongoDB (mongodb://127.0.0.1:27017/nera_db)';
-    console.log('✅ Connected to Local MongoDB server successfully!');
+    console.log('✅ [DATABASE AUDIT] Connected to Local MongoDB server successfully!');
   } catch (err: any) {
-    console.error('❌ Failed to connect to any MongoDB server:', err.message);
+    console.error('❌ [DATABASE AUDIT] Failed to connect to any MongoDB server:', err.message);
     isMongoConnected = false;
     dbSource = 'Disconnected';
   }
@@ -231,26 +263,123 @@ function computeMatchScore(worker: any, shift: any) {
 
 // Health & DB info
 app.get('/api/health', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/health');
   const usersCount = isMongoConnected ? await UserModel.countDocuments() : 0;
   const workersCount = isMongoConnected ? await WorkerModel.countDocuments() : 0;
   const shiftsCount = isMongoConnected ? await ShiftModel.countDocuments() : 0;
+  const businessesCount = isMongoConnected ? await BusinessModel.countDocuments() : 0;
+  const attendanceCount = isMongoConnected ? await AttendanceModel.countDocuments() : 0;
+  const ratingsCount = isMongoConnected ? await RatingModel.countDocuments() : 0;
 
   res.json({
     status: isMongoConnected ? 'online' : 'database_connecting',
     service: 'NERA Emergency Shift Engine Backend',
     database: dbSource,
+    connectionError: connectionErrorDetails,
     currency: 'INR (₹)',
     timestamp: new Date().toISOString(),
     collections: {
       users: usersCount,
       workers: workersCount,
+      businesses: businessesCount,
       shifts: shiftsCount,
+      attendance: attendanceCount,
+      ratings: ratingsCount,
     },
   });
 });
 
+// --- AUDIT & TEST ENDPOINTS ---
+
+// 1. Audit Test Endpoint: Insert sample user and verify in MongoDB
+app.post('/api/v1/test/insert-user', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/test/insert-user');
+  try {
+    const { name, email, role, phone } = req.body;
+    const testId = `test-user-${Date.now()}`;
+    const testUser = {
+      id: testId,
+      name: name || 'Test Audit User',
+      email: (email || `test-${Date.now()}@nera.in`).toLowerCase(),
+      role: role || 'worker',
+      phone: phone || '+91 98765 00000',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      createdAt: new Date(),
+    };
+
+    console.log(`[MONGOOSE MODEL] UserModel.create() invoked with:`, testUser);
+    
+    if (!isMongoConnected) {
+      console.warn('[DATABASE] MongoDB is currently disconnected!');
+      return res.status(503).json({
+        success: false,
+        error: 'Database is not connected',
+        activeDatabase: dbSource,
+        connectionError: connectionErrorDetails,
+      });
+    }
+
+    const savedDoc = await UserModel.create(testUser);
+    console.log(`[DATABASE] Document successfully saved with Mongo _id: ${savedDoc._id}`);
+
+    // Immediately query back from the database to prove it exists
+    console.log(`[MONGOOSE MODEL] UserModel.findOne({ id: '${testId}' }) verifying persistence...`);
+    const verifiedDoc = await UserModel.findOne({ id: testId });
+    const totalUsers = await UserModel.countDocuments();
+
+    console.log(`[DATABASE] Verification successful! Total users in '${dbSource}': ${totalUsers}`);
+
+    res.status(201).json({
+      success: true,
+      message: `Sample user created and verified in ${dbSource}`,
+      activeDatabase: dbSource,
+      isAtlasConnected: dbSource.includes('Atlas'),
+      document: verifiedDoc,
+      totalUsersInCollection: totalUsers,
+      auditChecklist: {
+        envLoaded: Boolean(MONGODB_URI),
+        mongooseConnect: isMongoConnected,
+        routeReceived: true,
+        bodyParsed: true,
+        mongooseSaved: Boolean(savedDoc._id),
+        databaseVerified: Boolean(verifiedDoc),
+      },
+    });
+  } catch (err: any) {
+    console.error(`[DATABASE ERROR] Failed to insert test user: ${err.message}`);
+    res.status(500).json({ success: false, error: err.message, activeDatabase: dbSource });
+  }
+});
+
+// 2. Audit Verification Endpoint
+app.get('/api/v1/test/verify-atlas', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/test/verify-atlas');
+  const maskedUri = MONGODB_URI ? MONGODB_URI.replace(/:([^@]+)@/, ':****@') : 'NOT_SET';
+  
+  const audit = {
+    configuredUri: maskedUri,
+    activeDatabase: dbSource,
+    isAtlasConnected: dbSource.includes('Atlas'),
+    connectionState: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    databaseName: mongoose.connection.name || 'nera_db',
+    host: mongoose.connection.host || 'unknown',
+    connectionError: connectionErrorDetails,
+    counts: {
+      users: isMongoConnected ? await UserModel.countDocuments() : 0,
+      workers: isMongoConnected ? await WorkerModel.countDocuments() : 0,
+      businesses: isMongoConnected ? await BusinessModel.countDocuments() : 0,
+      shifts: isMongoConnected ? await ShiftModel.countDocuments() : 0,
+    },
+  };
+
+  res.json({ success: true, audit });
+});
+
+// --- Standard API Routes with Full Logging ---
+
 // 1. Auth Module
 app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/auth/register');
   try {
     const { name, email, role, phone } = req.body;
     const userId = `user-${Date.now()}`;
@@ -265,61 +394,73 @@ app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
     };
 
     if (isMongoConnected) {
+      console.log(`[MONGOOSE MODEL] UserModel.create() inserting: ${user.email}`);
       await UserModel.create(user);
+      console.log(`[DATABASE] Saved user ${user.id} into ${dbSource}`);
     }
     res.status(201).json({ success: true, user, token: `jwt_nera_${user.id}` });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Registration failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/auth/login');
   try {
     const { email } = req.body;
     let user: any = null;
     if (isMongoConnected && email) {
+      console.log(`[MONGOOSE MODEL] UserModel.findOne({ email: '${email.toLowerCase()}' })`);
       user = await UserModel.findOne({ email: email.toLowerCase() });
     }
     if (!user) {
-      // Return newly created session or standard response
       user = {
         id: `user-${Date.now()}`,
         name: email ? email.split('@')[0] : 'User',
-        email: email || 'user@nera.in',
+        email: (email || 'user@nera.in').toLowerCase(),
         role: 'business',
         phone: '+91 98765 43210',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         createdAt: new Date(),
       };
       if (isMongoConnected) {
+        console.log(`[MONGOOSE MODEL] UserModel.create() creating new user on login`);
         await UserModel.create(user);
       }
     }
     res.json({ success: true, user, token: `jwt_nera_${user.id}` });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Login failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // 2. Users
 app.get('/api/v1/users', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/users');
   const users = isMongoConnected ? await UserModel.find().sort({ createdAt: -1 }) : [];
+  console.log(`[DATABASE] Fetched ${users.length} users from ${dbSource}`);
   res.json({ success: true, users });
 });
 
 // 3. Businesses
 app.get('/api/v1/businesses', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/businesses');
   const businesses = isMongoConnected ? await BusinessModel.find().sort({ createdAt: -1 }) : [];
+  console.log(`[DATABASE] Fetched ${businesses.length} businesses from ${dbSource}`);
   res.json({ success: true, businesses });
 });
 
 app.get('/api/v1/businesses/:id', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling GET /api/v1/businesses/${req.params.id}`);
   const business = isMongoConnected ? await BusinessModel.findOne({ id: req.params.id }) : null;
   if (!business) return res.status(404).json({ success: false, error: 'Business not found' });
   res.json({ success: true, business });
 });
 
 app.post('/api/v1/businesses', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/businesses');
   try {
     const bizData = req.body;
     const newBiz = {
@@ -338,27 +479,34 @@ app.post('/api/v1/businesses', async (req: Request, res: Response) => {
     };
 
     if (isMongoConnected) {
+      console.log(`[MONGOOSE MODEL] BusinessModel.create() saving: ${newBiz.companyName}`);
       await BusinessModel.create(newBiz);
+      console.log(`[DATABASE] Saved business ${newBiz.id} into ${dbSource}`);
     }
     res.status(201).json({ success: true, business: newBiz });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Create business failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // 4. Workers
 app.get('/api/v1/workers', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/workers');
   const workers = isMongoConnected ? await WorkerModel.find().sort({ createdAt: -1 }) : [];
+  console.log(`[DATABASE] Fetched ${workers.length} workers from ${dbSource}`);
   res.json({ success: true, workers });
 });
 
 app.get('/api/v1/workers/:id', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling GET /api/v1/workers/${req.params.id}`);
   const worker = isMongoConnected ? await WorkerModel.findOne({ $or: [{ id: req.params.id }, { userId: req.params.id }] }) : null;
   if (!worker) return res.status(404).json({ success: false, error: 'Worker not found' });
   res.json({ success: true, worker });
 });
 
 app.post('/api/v1/workers', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/workers');
   try {
     const w = req.body;
     const newWorker = {
@@ -390,15 +538,19 @@ app.post('/api/v1/workers', async (req: Request, res: Response) => {
     };
 
     if (isMongoConnected) {
+      console.log(`[MONGOOSE MODEL] WorkerModel.create() saving: ${newWorker.name}`);
       await WorkerModel.create(newWorker);
+      console.log(`[DATABASE] Saved worker ${newWorker.id} into ${dbSource}`);
     }
     res.status(201).json({ success: true, worker: newWorker });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Create worker failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.patch('/api/v1/workers/:id', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling PATCH /api/v1/workers/${req.params.id}`);
   try {
     if (isMongoConnected) {
       const updated = await WorkerModel.findOneAndUpdate(
@@ -410,23 +562,28 @@ app.patch('/api/v1/workers/:id', async (req: Request, res: Response) => {
     }
     res.json({ success: true, worker: req.body });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Update worker failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // 5. Shifts Module
 app.get('/api/v1/shifts', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/shifts');
   const shifts = isMongoConnected ? await ShiftModel.find().sort({ createdAt: -1 }) : [];
+  console.log(`[DATABASE] Fetched ${shifts.length} shifts from ${dbSource}`);
   res.json({ success: true, shifts });
 });
 
 app.get('/api/v1/shifts/:id', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling GET /api/v1/shifts/${req.params.id}`);
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
   res.json({ success: true, shift });
 });
 
 app.post('/api/v1/shifts', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/shifts');
   try {
     const shiftData = req.body;
     const pay = Number(shiftData.payAmount) || 1200; // in INR ₹
@@ -462,16 +619,20 @@ app.post('/api/v1/shifts', async (req: Request, res: Response) => {
     };
 
     if (isMongoConnected) {
+      console.log(`[MONGOOSE MODEL] ShiftModel.create() saving: ${newShift.role} at ${newShift.businessName}`);
       await ShiftModel.create(newShift);
       await BusinessModel.updateOne({ id: newShift.businessId }, { $inc: { shiftsPosted: 1 } });
+      console.log(`[DATABASE] Saved shift ${newShift.id} into ${dbSource}`);
     }
     res.status(201).json({ success: true, shift: newShift });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Create shift failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.patch('/api/v1/shifts/:id', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling PATCH /api/v1/shifts/${req.params.id}`);
   try {
     if (isMongoConnected) {
       const updated = await ShiftModel.findOneAndUpdate({ id: req.params.id }, { $set: req.body }, { new: true });
@@ -479,19 +640,23 @@ app.patch('/api/v1/shifts/:id', async (req: Request, res: Response) => {
     }
     res.json({ success: true, shift: req.body });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Update shift failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.delete('/api/v1/shifts/:id', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling DELETE /api/v1/shifts/${req.params.id}`);
   if (isMongoConnected) {
     await ShiftModel.deleteOne({ id: req.params.id });
+    console.log(`[DATABASE] Deleted shift ${req.params.id} from ${dbSource}`);
   }
   res.json({ success: true, message: 'Shift deleted successfully' });
 });
 
 // 6. Smart Matching & Cascade Endpoints
 app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling GET /api/v1/shifts/${req.params.id}/matches`);
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
@@ -501,6 +666,7 @@ app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
 });
 
 app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling POST /api/v1/shifts/${req.params.id}/cascade`);
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
@@ -522,12 +688,14 @@ app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
 
   if (isMongoConnected) {
     await shift.save();
+    console.log(`[DATABASE] Shift cascade saved to ${dbSource}`);
   }
 
   res.json({ success: true, message: 'Offer cascade initiated', shift });
 });
 
 app.post('/api/v1/shifts/:id/accept', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling POST /api/v1/shifts/${req.params.id}/accept`);
   const { workerId } = req.body;
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
@@ -550,12 +718,14 @@ app.post('/api/v1/shifts/:id/accept', async (req: Request, res: Response) => {
   if (isMongoConnected) {
     await shift.save();
     await WorkerModel.updateOne({ id: workerId }, { activeShiftId: shift.id });
+    console.log(`[DATABASE] Shift ${shift.id} assigned to worker ${worker.name} in ${dbSource}`);
   }
 
   res.json({ success: true, message: 'Shift offer accepted', shift });
 });
 
 app.post('/api/v1/shifts/:id/decline', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling POST /api/v1/shifts/${req.params.id}/decline`);
   const { workerId } = req.body;
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
@@ -580,6 +750,7 @@ app.post('/api/v1/shifts/:id/decline', async (req: Request, res: Response) => {
 
   if (isMongoConnected) {
     await shift.save();
+    console.log(`[DATABASE] Shift cascade updated after decline in ${dbSource}`);
   }
 
   res.json({ success: true, message: 'Shift offer declined. Forwarded in cascade.', shift });
@@ -587,6 +758,7 @@ app.post('/api/v1/shifts/:id/decline', async (req: Request, res: Response) => {
 
 // 7. QR Attendance Endpoints
 app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
+  console.log(`[CONTROLLER] Handling GET /api/v1/shifts/${req.params.id}/qr-code`);
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
 
@@ -604,11 +776,13 @@ app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
 });
 
 app.get('/api/v1/attendance', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/attendance');
   const attendance = isMongoConnected ? await AttendanceModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, attendance });
 });
 
 app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/attendance/scan');
   const { shiftId, workerId, qrCodeSecret, scanType } = req.body;
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: shiftId }) : null;
   if (!shift) return res.status(404).json({ success: false, error: 'Shift not found' });
@@ -632,6 +806,7 @@ app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
       );
       await BusinessModel.updateOne({ id: shift.businessId }, { $inc: { totalSpent: shift.totalCost } });
       await shift.save();
+      console.log(`[DATABASE] Shift ${shift.id} check-out finalized in ${dbSource}`);
     }
     return res.json({ success: true, message: `Check-out verified! Payment of ₹${shift.payAmount} unlocked.`, shift });
   } else {
@@ -656,6 +831,7 @@ app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
     if (isMongoConnected) {
       await AttendanceModel.create(attendanceRecord);
       await shift.save();
+      console.log(`[DATABASE] Attendance check-in recorded for shift ${shift.id} in ${dbSource}`);
     }
     return res.json({ success: true, message: `Check-in verified at ${shift.businessName}! Shift is live.`, shift, attendance: attendanceRecord });
   }
@@ -663,11 +839,13 @@ app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
 
 // 8. Ratings Endpoints
 app.get('/api/v1/ratings', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/ratings');
   const ratings = isMongoConnected ? await RatingModel.find().sort({ createdAt: -1 }) : [];
   res.json({ success: true, ratings });
 });
 
 app.post('/api/v1/ratings', async (req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/ratings');
   try {
     const { shiftId, fromUserId, fromUserName, toUserId, toUserName, rating, review, tags } = req.body;
     const ratingRecord = {
@@ -693,15 +871,18 @@ app.post('/api/v1/ratings', async (req: Request, res: Response) => {
         worker.totalRatings = newTotalRatings;
         await worker.save();
       }
+      console.log(`[DATABASE] Rating recorded for shift ${shiftId} in ${dbSource}`);
     }
     res.status(201).json({ success: true, rating: ratingRecord });
   } catch (err: any) {
+    console.error(`[DATABASE ERROR] Create rating failed: ${err.message}`);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // 9. Analytics Endpoint
 app.get('/api/v1/analytics', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling GET /api/v1/analytics');
   const shifts = isMongoConnected ? await ShiftModel.find() : [];
   const completed = shifts.filter((s: any) => s.status === 'completed');
   const active = shifts.filter((s: any) => ['cascading', 'assigned', 'in_progress'].includes(s.status));
@@ -732,6 +913,7 @@ app.get('/api/v1/analytics', async (_req: Request, res: Response) => {
 
 // 10. Database Reset / Wipe Endpoint
 app.post('/api/v1/database/clear', async (_req: Request, res: Response) => {
+  console.log('[CONTROLLER] Handling POST /api/v1/database/clear');
   if (isMongoConnected) {
     await ShiftModel.deleteMany({});
     await AttendanceModel.deleteMany({});
@@ -739,6 +921,7 @@ app.post('/api/v1/database/clear', async (_req: Request, res: Response) => {
     await WorkerModel.deleteMany({});
     await BusinessModel.deleteMany({});
     await UserModel.deleteMany({});
+    console.log(`[DATABASE] All collections cleared in ${dbSource}`);
   }
   res.json({ success: true, message: 'All MongoDB collections wiped clean. 0 records remaining.' });
 });

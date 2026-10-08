@@ -4,6 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  const method = options.method || 'GET';
   const config: RequestInit = {
     ...options,
     headers: {
@@ -12,15 +13,18 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     },
   };
 
+  console.log(`📡 [FRONTEND API REQUEST] -> ${method} ${url}`, options.body ? JSON.parse(options.body as string) : '');
+
   try {
     const response = await fetch(url, config);
     const data = await response.json();
+    console.log(`📥 [FRONTEND API RESPONSE] <- Status: ${response.status} from ${endpoint}:`, data);
     if (!response.ok) {
       throw new Error(data.error || data.message || `Request failed with status ${response.status}`);
     }
     return data;
-  } catch (error) {
-    console.warn(`API error on ${endpoint}:`, error);
+  } catch (error: any) {
+    console.error(`❌ [FRONTEND API ERROR] on ${endpoint}:`, error.message);
     throw error;
   }
 }
@@ -120,8 +124,23 @@ export const api = {
   // Analytics
   getAnalytics: () => request<{ success: boolean; analytics: PlatformAnalytics }>('/analytics'),
 
-  // Clear / Reset DB
+  // Database Clear
   clearDatabase: () => request<{ success: boolean; message: string }>('/database/clear', {
     method: 'POST',
   }),
+
+  // Test Endpoint
+  testInsertUser: (userData?: { name?: string; email?: string; role?: string; phone?: string }) => request<{
+    success: boolean;
+    message: string;
+    activeDatabase: string;
+    isAtlasConnected: boolean;
+    document: any;
+    totalUsersInCollection: number;
+    auditChecklist: any;
+  }>('/test/insert-user', {
+    method: 'POST',
+    body: JSON.stringify(userData || {}),
+  }),
 };
+
