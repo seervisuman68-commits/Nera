@@ -12,23 +12,46 @@ const MONGODB_URI = process.env.MONGODB_URI;
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Mongoose Connection
+// MongoDB Connection Logic with Automatic Fallback
 let isMongoConnected = false;
-if (MONGODB_URI && MONGODB_URI.trim() !== '') {
-  mongoose
-    .connect(MONGODB_URI)
-    .then(() => {
+let dbConnectionSource = 'Local / Memory';
+
+async function connectDatabase() {
+  if (MONGODB_URI && MONGODB_URI.trim() !== '') {
+    try {
+      console.log('🔄 Attempting connection to MongoDB Atlas...');
+      await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
       isMongoConnected = true;
-      console.log('✅ Connected to MongoDB Atlas successfully!');
-    })
-    .catch((err) => {
-      console.warn('⚠️ MongoDB Atlas connection error. Falling back to local storage:', err.message);
-    });
-} else {
-  console.log('ℹ️ No MONGODB_URI found in .env. Running with fast in-memory & Firestore-ready store.');
+      dbConnectionSource = 'MongoDB Atlas (Cloud)';
+      console.log('✅ Connected to MongoDB Atlas Cloud Cluster successfully!');
+      return;
+    } catch (err: any) {
+      console.error(`❌ MongoDB Atlas Error: ${err.message}`);
+      if (err.message.includes('bad auth') || err.message.includes('authentication failed')) {
+        console.warn('🔑 Auth Issue: Check your Atlas username/password in MongoDB Atlas -> Database Access.');
+      } else if (err.message.includes('ENOTFOUND') || err.message.includes('querySrv')) {
+        console.warn('🌐 Network Issue: Ensure 0.0.0.0/0 is added in MongoDB Atlas -> Network Access.');
+      }
+    }
+  }
+
+  // Fallback to local MongoDB server if available
+  try {
+    console.log('🔄 Connecting to Local MongoDB instance (mongodb://127.0.0.1:27017/nera_db)...');
+    await mongoose.connect('mongodb://127.0.0.1:27017/nera_db', { serverSelectionTimeoutMS: 3000 });
+    isMongoConnected = true;
+    dbConnectionSource = 'Local MongoDB (mongodb://127.0.0.1:27017)';
+    console.log('✅ Connected to Local MongoDB server successfully! Data is persistently stored.');
+  } catch (localErr: any) {
+    console.warn('⚠️ Local MongoDB not reachable. Running with fast in-memory fallback.');
+    isMongoConnected = false;
+    dbConnectionSource = 'In-Memory Store';
+  }
 }
 
-// Mongoose Schemas (when MongoDB is connected)
+connectDatabase();
+
+// Mongoose Schemas
 const UserSchema = new mongoose.Schema({
   id: String,
   name: String,
@@ -114,7 +137,7 @@ const ShiftModel = mongoose.models.Shift || mongoose.model('Shift', ShiftSchema)
 const AttendanceModel = mongoose.models.Attendance || mongoose.model('Attendance', AttendanceSchema);
 const RatingModel = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
 
-// In-Memory Database collections (Fast fallback)
+// In-Memory Fallback Store
 const inMemoryDb = {
   users: [
     { id: 'user-b1', name: 'Alex Johnson', email: 'alex@urbanbrew.com', role: 'business', phone: '+15552345678', createdAt: new Date().toISOString() },
@@ -141,26 +164,6 @@ const inMemoryDb = {
       punctualityRate: 99.1,
       completionRate: 100,
       cancellationRate: 0.0,
-    },
-    {
-      id: 'w-2',
-      userId: 'user-w2',
-      name: 'Maya Chen',
-      role: 'Barista & Register Lead',
-      skills: ['Barista', 'POS Operations', 'Customer Service'],
-      experienceYears: 2.8,
-      reliabilityScore: 94.0,
-      isAvailable: true,
-      availabilityStatus: 'Available Now',
-      location: { latitude: 40.7321, longitude: -74.0012, address: 'Greenwich Village (1.2 km)' },
-      ratingAvg: 4.85,
-      totalRatings: 19,
-      totalShiftsCompleted: 21,
-      hourlyRate: 24.0,
-      badges: ['Verified Passport ✅', 'Speed Demon ⚡'],
-      punctualityRate: 96.0,
-      completionRate: 98.0,
-      cancellationRate: 2.0,
     },
   ],
   shifts: [] as any[],
@@ -216,12 +219,12 @@ function computeMatchScore(worker: any, shift: any) {
 
 // --- API ROUTES ---
 
-// Health check & DB status
 app.get('/api/health', async (req: Request, res: Response) => {
   res.json({
     status: 'online',
     service: 'NERA Emergency Shift Engine Backend',
-    database: isMongoConnected ? 'MongoDB Atlas (Connected)' : 'Firestore / Local Isomorphic Store',
+    database: dbConnectionSource,
+    isMongoConnected,
     timestamp: new Date().toISOString(),
     stats: {
       shiftsCount: isMongoConnected ? await ShiftModel.countDocuments() : inMemoryDb.shifts.length,
@@ -230,7 +233,6 @@ app.get('/api/health', async (req: Request, res: Response) => {
   });
 });
 
-// 1. Auth Module
 app.post('/api/v1/auth/register', async (req: Request, res: Response) => {
   const { name, email, role, phone } = req.body;
   const user = {
@@ -262,7 +264,6 @@ app.post('/api/v1/auth/login', async (req: Request, res: Response) => {
   res.json({ success: true, user, token: `jwt_nera_${user.id}_token` });
 });
 
-// 2. Shift Management Module
 app.post('/api/v1/shifts', async (req: Request, res: Response) => {
   const shiftData = req.body;
   const pay = Number(shiftData.payAmount) || 140.0;
@@ -309,7 +310,6 @@ app.get('/api/v1/shifts/:id', async (req: Request, res: Response) => {
   res.json({ success: true, shift });
 });
 
-// 3. Smart Matching Engine Endpoint
 app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
@@ -319,7 +319,6 @@ app.get('/api/v1/shifts/:id/matches', async (req: Request, res: Response) => {
   res.json({ success: true, shiftId: shift.id, candidates: ranked });
 });
 
-// 4. Offer Cascade Endpoint
 app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
@@ -346,7 +345,6 @@ app.post('/api/v1/shifts/:id/cascade', async (req: Request, res: Response) => {
   res.json({ success: true, message: 'Offer cascade initiated', shift });
 });
 
-// 5. QR Code Generation Endpoint
 app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: req.params.id }) : inMemoryDb.shifts.find((s) => s.id === req.params.id);
   if (!shift) return res.status(404).json({ error: 'Shift not found' });
@@ -364,7 +362,6 @@ app.get('/api/v1/shifts/:id/qr-code', async (req: Request, res: Response) => {
   });
 });
 
-// 6. Attendance & QR Scan Verification Endpoint
 app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
   const { shiftId, workerId, qrCodeSecret, scanType } = req.body;
   const shift = isMongoConnected ? await ShiftModel.findOne({ id: shiftId }) : inMemoryDb.shifts.find((s) => s.id === shiftId);
@@ -410,7 +407,6 @@ app.post('/api/v1/attendance/scan', async (req: Request, res: Response) => {
   }
 });
 
-// 7. Ratings & Reliability Recalculation
 app.post('/api/v1/ratings', async (req: Request, res: Response) => {
   const { shiftId, fromUserId, toUserId, rating, review, tags } = req.body;
   const newRating = {
@@ -437,7 +433,6 @@ app.post('/api/v1/ratings', async (req: Request, res: Response) => {
   res.status(201).json({ success: true, rating: newRating });
 });
 
-// 8. Skill Passport Endpoint
 app.get('/api/v1/workers/:id/passport', async (req: Request, res: Response) => {
   const worker = isMongoConnected
     ? await WorkerModel.findOne({ $or: [{ id: req.params.id }, { userId: req.params.id }] })
@@ -461,7 +456,6 @@ app.get('/api/v1/workers/:id/passport', async (req: Request, res: Response) => {
   });
 });
 
-// 9. Analytics & Platform Revenue Endpoint
 app.get('/api/v1/analytics', async (req: Request, res: Response) => {
   const shifts = isMongoConnected ? await ShiftModel.find() : inMemoryDb.shifts;
   const completed = shifts.filter((s: any) => s.status === 'completed');
