@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ShiftProvider } from './context/ShiftContext';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
+import { WorkflowHelper } from './components/common/WorkflowHelper';
 
 // Pages
 import { LandingPage } from './pages/LandingPage';
@@ -29,6 +30,7 @@ export function App() {
         <ShiftProvider>
           <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
             <Navbar />
+            <WorkflowHelper />
             <main className="flex-1">
               <Routes>
                 {/* 1. Landing Page */}
